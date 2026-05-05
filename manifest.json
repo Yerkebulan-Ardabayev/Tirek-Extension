@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Margli — Kaspi анти-демпинг",
+  "version": "0.1.0",
+  "description": "Реальная маржа и анти-демпинг для селлеров Kaspi.kz",
+  "permissions": ["storage", "alarms", "notifications", "activeTab"],
+  "host_permissions": ["https://kaspi.kz/*", "https://*.kaspi.kz/*"],
+  "background": {
+    "service_worker": "background/worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://kaspi.kz/shop/p/*"],
+      "js": ["content/shop-page.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://kaspi.kz/mc/products*",
+        "https://kaspi.kz/mc/products/*",
+        "https://kaspi.kz/mc/orders*",
+        "https://kaspi.kz/mc/orders/*"
+      ],
+      "js": ["content/mc-products.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    },
+    "default_title": "Margli"
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["content/overlay.css"],
+      "matches": ["https://kaspi.kz/*", "https://*.kaspi.kz/*"]
+    }
+  ]
+}

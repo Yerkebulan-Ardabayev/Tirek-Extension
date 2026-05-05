@@ -1,0 +1,28 @@
+{
+  "name": "margli-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Margli — Kaspi анти-демпинг и калькулятор реальной маржи (Chrome MV3)",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:icons": "node scripts/build-icons.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "jspdf": "^2.5.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^20.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,281 @@
+/**
+ * Overlay-бейдж и боковая панель на странице товара kaspi.kz/shop/p/*
+ *
+ * Сделано на vanilla TS + Shadow DOM (не React) — нужно меньше JS, нет
+ * конфликтов с Kaspi'ом (внутри shadow стили изолированы), и зависимости
+ * расширения не разрастаются.
+ */
+
+import type { Competitor, ShopPageSnapshot } from "../lib/types";
+
+export type OverlayCallbacks = {
+  /** Юзер нажал «Следить». Возвращает true если успешно. */
+  onWatch: (snapshot: ShopPageSnapshot) => Promise<boolean>;
+  /** Юзер нажал «Скачать досье». */
+  onDossier: (snapshot: ShopPageSnapshot, dumpers: Competitor[]) => void;
+};
+
+export type OverlayState = {
+  /** Снапшот, на основе которого нарисован overlay */
+  snapshot: ShopPageSnapshot;
+  /** Цена селлера-юзера (если знаем) — для расчёта дельт */
+  myPrice: number | null;
+  /** Имя моего магазина — для подсветки и подписи в досье */
+  myShopName: string | null;
+  /** Порог демпинга, % (default -5) */
+  dumpingThresholdPct: number;
+  /** Включён ли watch для этого SKU */
+  isWatched: boolean;
+};
+
+const HOST_ID = "margli-overlay-host";
+
+let mounted = false;
+let drawerOpen = false;
+
+export function mountOverlay(state: OverlayState, callbacks: OverlayCallbacks): void {
+  if (mounted) {
+    update(state, callbacks);
+    return;
+  }
+  mounted = true;
+
+  const host = document.createElement("div");
+  host.id = HOST_ID;
+  host.style.cssText = "all:initial;";
+  document.body.appendChild(host);
+
+  const shadow = host.attachShadow({ mode: "open" });
+  injectStyles(shadow);
+
+  const badge = document.createElement("button");
+  badge.type = "button";
+  badge.className = "margli-badge";
+  shadow.appendChild(badge);
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "margli-drawer-backdrop";
+  shadow.appendChild(backdrop);
+
+  const drawer = document.createElement("div");
+  drawer.className = "margli-drawer";
+  shadow.appendChild(drawer);
+
+  badge.addEventListener("click", () => openDrawer(shadow));
+  backdrop.addEventListener("click", () => closeDrawer(shadow));
+
+  // Render content
+  renderBadge(badge, state);
+  renderDrawer(drawer, state, callbacks, shadow);
+}
+
+export function unmountOverlay(): void {
+  const host = document.getElementById(HOST_ID);
+  if (host) host.remove();
+  mounted = false;
+  drawerOpen = false;
+}
+
+function update(state: OverlayState, callbacks: OverlayCallbacks): void {
+  const host = document.getElementById(HOST_ID);
+  if (!host?.shadowRoot) return;
+  const badge = host.shadowRoot.querySelector(".margli-badge") as HTMLButtonElement | null;
+  const drawer = host.shadowRoot.querySelector(".margli-drawer") as HTMLElement | null;
+  if (badge) renderBadge(badge, state);
+  if (drawer) renderDrawer(drawer, state, callbacks, host.shadowRoot);
+}
+
+function injectStyles(shadow: ShadowRoot): void {
+  const styleUrl = chrome.runtime.getURL("content/overlay.css");
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = styleUrl;
+  shadow.appendChild(link);
+}
+
+function renderBadge(badge: HTMLButtonElement, state: OverlayState): void {
+  const dumpers = computeDumpers(state);
+  if (dumpers.length === 0) {
+    badge.classList.add("is-clean");
+    badge.innerHTML = `<span class="icon">✅</span><span>Margli: конкурентов ниже нет</span>`;
+  } else {
+    badge.classList.remove("is-clean");
+    const minDelta = Math.min(...dumpers.map((d) => deltaPct(d.price, state.myPrice ?? 0)));
+    badge.innerHTML = `<span class="icon">🛡</span><span>Margli: ${dumpers.length} ${plural(dumpers.length, "демпер", "демпера", "демперов")}, ${minDelta.toFixed(1)}%</span>`;
+  }
+}
+
+function renderDrawer(
+  drawer: HTMLElement,
+  state: OverlayState,
+  callbacks: OverlayCallbacks,
+  shadow: ShadowRoot,
+): void {
+  const dumpers = computeDumpers(state);
+  const sortedCompetitors = [...state.snapshot.competitors].sort((a, b) => a.price - b.price);
+  const minPrice = sortedCompetitors[0]?.price ?? null;
+
+  drawer.innerHTML = `
+    <div class="margli-drawer__header">
+      <div>
+        <div class="title">${escapeHtml(state.snapshot.productName ?? "Товар")}</div>
+        <div class="subtitle">${state.snapshot.sku ? "SKU: " + escapeHtml(state.snapshot.sku) : ""}</div>
+      </div>
+      <button class="margli-drawer__close" aria-label="Закрыть">✕</button>
+    </div>
+
+    <div class="margli-drawer__summary">
+      <div class="margli-stat">
+        <div class="label">Моя цена</div>
+        <div class="value">${state.myPrice != null ? formatTenge(state.myPrice) : "—"}</div>
+      </div>
+      <div class="margli-stat">
+        <div class="label">Мин. на карточке</div>
+        <div class="value">${minPrice != null ? formatTenge(minPrice) : "—"}</div>
+      </div>
+      <div class="margli-stat ${dumpers.length > 0 ? "is-danger" : "is-success"}">
+        <div class="label">Демперов</div>
+        <div class="value">${dumpers.length}</div>
+      </div>
+      <div class="margli-stat">
+        <div class="label">Всего продавцов</div>
+        <div class="value">${state.snapshot.competitors.length}</div>
+      </div>
+    </div>
+
+    <div class="margli-drawer__body">
+      ${renderTable(sortedCompetitors, state)}
+    </div>
+
+    <div class="margli-drawer__actions">
+      <button class="margli-btn margli-btn--ghost" data-action="watch">
+        ${state.isWatched ? "✓ Под наблюдением" : "⭐ Следить"}
+      </button>
+      <button class="margli-btn margli-btn--primary" data-action="dossier" ${dumpers.length === 0 ? "disabled" : ""}>
+        📄 Досье жалобы
+      </button>
+    </div>
+  `;
+
+  drawer.querySelector(".margli-drawer__close")?.addEventListener("click", () => closeDrawer(shadow));
+
+  const watchBtn = drawer.querySelector("[data-action='watch']") as HTMLButtonElement | null;
+  watchBtn?.addEventListener("click", async () => {
+    watchBtn.disabled = true;
+    try {
+      const ok = await callbacks.onWatch(state.snapshot);
+      if (ok) {
+        state.isWatched = true;
+        showToast(shadow, "Добавлено в под наблюдением");
+        renderDrawer(drawer, state, callbacks, shadow);
+      }
+    } finally {
+      watchBtn.disabled = false;
+    }
+  });
+
+  const dossierBtn = drawer.querySelector("[data-action='dossier']") as HTMLButtonElement | null;
+  dossierBtn?.addEventListener("click", () => {
+    callbacks.onDossier(state.snapshot, dumpers);
+  });
+}
+
+function renderTable(sorted: Competitor[], state: OverlayState): string {
+  if (sorted.length === 0) {
+    return `<div class="margli-empty">На этой карточке других продавцов не найдено.</div>`;
+  }
+  const rows = sorted
+    .map((c) => {
+      const isMine = c.shopName === state.myShopName;
+      const delta = state.myPrice != null ? deltaPct(c.price, state.myPrice) : null;
+      const cls = isMine
+        ? "is-mine"
+        : delta == null
+          ? ""
+          : delta <= state.dumpingThresholdPct
+            ? "is-dumper"
+            : delta < 0
+              ? "is-cheaper"
+              : "is-pricier";
+      const deltaTxt = delta == null ? "—" : `${delta.toFixed(1)}%`;
+      const reviews = c.reviewsCount != null ? c.reviewsCount.toString() : "—";
+      const youTag = isMine ? `<span class="you-tag">Я</span>` : "";
+      return `
+        <tr class="${cls}">
+          <td class="shop">${escapeHtml(c.shopName)}${youTag}</td>
+          <td class="price">${formatTenge(c.price)}</td>
+          <td class="delta">${deltaTxt}</td>
+          <td>${reviews}</td>
+        </tr>`;
+    })
+    .join("");
+  return `
+    <table class="margli-table">
+      <thead>
+        <tr>
+          <th>Магазин</th>
+          <th style="text-align:right">Цена</th>
+          <th style="text-align:right">Δ</th>
+          <th>Отзывы</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function computeDumpers(state: OverlayState): Competitor[] {
+  if (state.myPrice == null) return [];
+  return state.snapshot.competitors.filter((c) => {
+    if (c.shopName === state.myShopName) return false;
+    const delta = deltaPct(c.price, state.myPrice as number);
+    return delta <= state.dumpingThresholdPct;
+  });
+}
+
+function deltaPct(price: number, basePrice: number): number {
+  if (basePrice <= 0) return 0;
+  return ((price - basePrice) / basePrice) * 100;
+}
+
+function openDrawer(shadow: ShadowRoot): void {
+  drawerOpen = true;
+  shadow.querySelector(".margli-drawer-backdrop")?.classList.add("is-open");
+  shadow.querySelector(".margli-drawer")?.classList.add("is-open");
+}
+
+function closeDrawer(shadow: ShadowRoot): void {
+  drawerOpen = false;
+  shadow.querySelector(".margli-drawer-backdrop")?.classList.remove("is-open");
+  shadow.querySelector(".margli-drawer")?.classList.remove("is-open");
+}
+
+function showToast(shadow: ShadowRoot, msg: string): void {
+  const t = document.createElement("div");
+  t.className = "margli-toast";
+  t.textContent = msg;
+  shadow.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatTenge(n: number): string {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₸";
+}
+
+function plural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m100 >= 11 && m100 <= 14) return many;
+  if (m10 === 1) return one;
+  if (m10 >= 2 && m10 <= 4) return few;
+  return many;
+}
