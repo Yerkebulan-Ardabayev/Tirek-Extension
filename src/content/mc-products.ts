@@ -4,8 +4,9 @@
  * Парсит таблицу товаров/заказов кабинета селлера, добавляет inline-бейджи
  * с маржой и предупреждением о демпинге.
  *
- * ВАЖНО: селекторы — гипотетические, см. kaspi-mc-parser.ts. Юзеру нужно
- * один раз открыть DevTools и поправить, если структура DOM отличается.
+ * Парсер двухуровневый: точечные селекторы → эвристика по заголовкам.
+ * См. lib/kaspi-mc-parser.ts. Если ни тот ни другой не нашли строк —
+ * показываем floating-баннер с просьбой прислать DevTools-snapshot.
  */
 
 import { findOrderRows, findProductRows } from "../lib/kaspi-mc-parser";
@@ -15,6 +16,12 @@ import { getAllCostProfiles, getSettings, getWatchlist } from "../lib/storage";
 console.log("[Margli] mc content script loaded", location.href);
 
 const BADGE_CLASS = "margli-mc-badge";
+const BANNER_ID = "margli-mc-empty-banner";
+
+/** Сколько раз попробовать перезапустить парсер если 0 строк (Kaspi подгружает лениво). */
+const MAX_PARSER_ATTEMPTS = 6;
+
+let parserAttempts = 0;
 
 async function run(): Promise<void> {
   const isProducts = /\/mc\/products/.test(location.pathname);
@@ -30,9 +37,15 @@ async function run(): Promise<void> {
   if (isProducts) {
     const rows = findProductRows();
     console.log("[Margli] product rows", rows.length);
+    if (rows.length === 0) {
+      onEmpty();
+      return;
+    }
+    removeBanner();
+    parserAttempts = 0;
+
     for (const row of rows) {
       if (!row.sku || !row.price) continue;
-      // Очищаем старый бейдж если есть
       row.rowEl.querySelectorAll(`.${BADGE_CLASS}`).forEach((el) => el.remove());
 
       const cost = costs[row.sku];
@@ -40,7 +53,6 @@ async function run(): Promise<void> {
 
       const badges: string[] = [];
 
-      // Бейдж маржи (если есть себестоимость)
       if (cost?.cost) {
         const m = calculateMargin({
           price: row.price,
@@ -64,7 +76,6 @@ async function run(): Promise<void> {
         );
       }
 
-      // Бейдж демпинга (если в watchlist и есть демперы)
       if (watch && watch.dumpersCount > 0) {
         const minDelta =
           watch.minCompetitorPrice != null && watch.myPrice > 0
@@ -76,7 +87,6 @@ async function run(): Promise<void> {
       }
 
       if (badges.length > 0) {
-        // Вставляем после последней ячейки или в конец строки
         const lastCell = row.rowEl.querySelector("td:last-child") ?? row.rowEl;
         const wrap = document.createElement("span");
         wrap.className = `${BADGE_CLASS}-wrap`;
@@ -89,7 +99,13 @@ async function run(): Promise<void> {
   if (isOrders) {
     const rows = findOrderRows();
     console.log("[Margli] order rows", rows.length);
-    // На странице заказов — пока только подсказка по марже (та же логика)
+    if (rows.length === 0) {
+      onEmpty();
+      return;
+    }
+    removeBanner();
+    parserAttempts = 0;
+
     for (const row of rows) {
       if (!row.sku || !row.price) continue;
       row.rowEl.querySelectorAll(`.${BADGE_CLASS}`).forEach((el) => el.remove());
@@ -119,6 +135,54 @@ async function run(): Promise<void> {
       lastCell.appendChild(badge);
     }
   }
+}
+
+function onEmpty(): void {
+  parserAttempts += 1;
+  // Сначала ждём, может страница ещё подгружается
+  if (parserAttempts < MAX_PARSER_ATTEMPTS) return;
+  showBanner();
+}
+
+function showBanner(): void {
+  if (document.getElementById(BANNER_ID)) return;
+  const div = document.createElement("div");
+  div.id = BANNER_ID;
+  div.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <div style="font-size:18px">📋</div>
+      <div style="flex:1;line-height:1.4">
+        <div style="font-weight:700;margin-bottom:4px">Margli не распознал таблицу</div>
+        <div style="font-size:12px;color:#a1a1aa">
+          Парсер не нашёл колонки «Название», «Цена» в DOM этой страницы.
+          Бейджи маржи не показаны. Откройте DevTools (F12) и пришлите HTML
+          таблицы — обновим парсер.
+        </div>
+      </div>
+      <button type="button" id="${BANNER_ID}-close" style="background:transparent;border:0;color:#a1a1aa;cursor:pointer;font-size:16px">✕</button>
+    </div>
+  `;
+  Object.assign(div.style, {
+    position: "fixed",
+    bottom: "20px",
+    right: "20px",
+    width: "320px",
+    background: "#1a1625",
+    color: "#f5f3ff",
+    border: "1px solid rgba(167,139,250,0.3)",
+    borderRadius: "10px",
+    padding: "12px 14px",
+    zIndex: "999999",
+    fontFamily: "Inter, system-ui, sans-serif",
+    fontSize: "13px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+  } as Partial<CSSStyleDeclaration>);
+  document.body.appendChild(div);
+  document.getElementById(`${BANNER_ID}-close`)?.addEventListener("click", removeBanner);
+}
+
+function removeBanner(): void {
+  document.getElementById(BANNER_ID)?.remove();
 }
 
 function formatTenge(n: number): string {

@@ -2,15 +2,23 @@
  * Background service worker (MV3).
  *
  * Задачи:
- *   1. chrome.alarms — каждые 30 минут перепроверять watchlist
- *   2. chrome.notifications — алертить о новых демперах
- *   3. Принимать сообщения от content и popup (snapshot, watchlist:add и т.п.)
+ *   1. chrome.alarms — каждые 30 минут перепроверять watchlist, открывая
+ *      каждый URL в скрытом minimized-окне. Content script инжектится
+ *      туда автоматом (см. manifest.json), парсит уже отрендеренный
+ *      Kaspi'ом DOM (с реальными ценами!) и шлёт snapshot обратно.
+ *   2. chrome.notifications — алертить о новых демперах.
+ *   3. Принимать сообщения от content и popup (snapshot, recheck:run).
+ *
+ * Почему скрытое окно вместо fetch:
+ *   Kaspi.kz рендерит цены клиентским JS — в SSR-HTML стоит "price":"undefined",
+ *   список продавцов отсутствует. Поэтому fetch() из service worker не даёт
+ *   данных. Реальный Chrome-контекст (даже minimized) выполняет JS Kaspi
+ *   и DOM получает цены.
  *
  * Кросс-браузерная заметка: на MV3 service worker может быть «убит» Chrome'ом
- * между alarm-событиями. Все состояние держим в chrome.storage.local.
+ * между alarm-событиями. Всё состояние держим в chrome.storage.local.
  */
 
-import { extractFromHtmlText } from "./fetch-helper";
 import {
   blacklistShopForSku,
   getLastSeen,
@@ -23,6 +31,12 @@ import type { Competitor, ExtensionMessage, ShopPageSnapshot, WatchlistItem } fr
 
 const ALARM_NAME = "margli:recheck";
 const RECHECK_PERIOD_MIN = 30;
+
+/** Сколько ждём snapshot от content script для одного URL. */
+const SNAPSHOT_TIMEOUT_MS = 25_000;
+
+/** Пауза между URL'ами при последовательном рече кe — даёт Chrome'у выгрузить страницу. */
+const PAUSE_BETWEEN_URLS_MS = 2_000;
 
 // --- alarms -----------------------------------------------------------------
 
@@ -93,29 +107,67 @@ chrome.runtime.onMessage.addListener((rawMsg: unknown, _sender, sendResponse) =>
   return true; // async response
 });
 
+/**
+ * Обрабатывает snapshot карточки независимо от источника:
+ *   - passive: селлер сам открыл /shop/p/* — content script отправил
+ *   - recheck: background открыл скрытое окно с тем же URL — content script
+ *     отправил из этой невидимой вкладки
+ *
+ * Логика одна: diff с lastSeen → новые демперы → notifications + обновление
+ * watchlist + сохранение нового lastSeen.
+ */
 async function handleSnapshot(snap: ShopPageSnapshot): Promise<void> {
   if (!snap.sku) return;
-  await setLastSeen(snap.sku, snap.competitors);
 
-  // Если этот SKU в watchlist — обновляем последнее значение
+  const settings = await getSettings();
   const list = await getWatchlist();
   const watched = list.find((it) => it.sku === snap.sku);
-  if (watched) {
-    const minCompetitor = snap.competitors.reduce<number | null>(
-      (min, c) => (min == null ? c.price : c.price < min ? c.price : min),
-      null,
-    );
-    const dumpers = computeDumpers(snap.competitors, watched.myPrice, watched.blacklistedShopIds);
-    await updateWatchlistItem(snap.sku, {
-      minCompetitorPrice: minCompetitor,
-      lastCheckedAt: Date.now(),
-      dumpersCount: dumpers.length,
-    });
+
+  // Сохраняем предыдущий снапшот ДО обновления — нужен для diff
+  const lastSeen = (await getLastSeen(snap.sku)) ?? [];
+  await setLastSeen(snap.sku, snap.competitors);
+
+  if (!watched) {
+    // Не в watchlist — просто запомнили цены, дальше ничего
+    return;
+  }
+
+  const minCompetitor = computeMin(snap.competitors);
+  const dumpers = computeDumpers(
+    snap.competitors,
+    watched.myPrice,
+    watched.blacklistedShopIds,
+    settings.dumpingThresholdPct,
+  );
+
+  await updateWatchlistItem(snap.sku, {
+    minCompetitorPrice: minCompetitor,
+    lastCheckedAt: Date.now(),
+    dumpersCount: dumpers.length,
+  });
+
+  if (!settings.alertsEnabled) return;
+
+  // Алертим только о НОВЫХ демперах (не было раньше или цена снизилась)
+  const newDumpers = findNewDumpers(
+    snap.competitors,
+    lastSeen,
+    watched.myPrice,
+    settings.dumpingThresholdPct,
+    watched.blacklistedShopIds,
+  );
+  for (const d of newDumpers) {
+    await sendDumpNotification(watched, d);
   }
 }
 
 // --- recheck loop -----------------------------------------------------------
 
+/**
+ * Периодический recheck. Открывает каждый URL из watchlist в одном скрытом
+ * minimized-окне последовательно, ждёт snapshot от content script, потом
+ * закрывает окно. Всё остальное — в handleSnapshot.
+ */
 async function runRecheck(): Promise<void> {
   const settings = await getSettings();
   if (!settings.alertsEnabled) {
@@ -123,64 +175,81 @@ async function runRecheck(): Promise<void> {
     return;
   }
   const watchlist = await getWatchlist();
-  console.log("[Margli/bg] recheck", watchlist.length, "items");
+  if (watchlist.length === 0) {
+    console.log("[Margli/bg] watchlist empty, skip recheck");
+    return;
+  }
+  console.log("[Margli/bg] recheck start, items:", watchlist.length);
 
-  for (const item of watchlist) {
+  const win = await chrome.windows.create({
+    url: "about:blank",
+    focused: false,
+    state: "minimized",
+    type: "popup",
+    width: 600,
+    height: 400,
+  });
+  const tabId = win.tabs?.[0]?.id;
+  if (tabId == null || win.id == null) {
+    console.warn("[Margli/bg] failed to create hidden window");
+    return;
+  }
+
+  try {
+    for (const item of watchlist) {
+      try {
+        await chrome.tabs.update(tabId, { url: item.url });
+        // Ждём snapshot конкретно по этому SKU. Если не пришёл за timeout —
+        // двигаемся дальше, не блокируем весь цикл.
+        const ok = await waitForSnapshot(item.sku, SNAPSHOT_TIMEOUT_MS);
+        console.log("[Margli/bg] recheck", item.sku, ok ? "ok" : "timeout");
+      } catch (err) {
+        console.warn("[Margli/bg] recheck item failed", item.sku, err);
+      }
+      await sleep(PAUSE_BETWEEN_URLS_MS);
+    }
+  } finally {
     try {
-      await recheckOne(item, settings.dumpingThresholdPct);
+      await chrome.windows.remove(win.id);
     } catch (err) {
-      console.warn("[Margli/bg] recheck item failed", item.sku, err);
+      console.warn("[Margli/bg] hidden window close failed", err);
     }
   }
 }
 
-async function recheckOne(item: WatchlistItem, threshold: number): Promise<void> {
-  const html = await fetchKaspiPage(item.url);
-  if (!html) return;
-  const competitors = extractFromHtmlText(html);
-  if (competitors.length === 0) {
-    console.log("[Margli/bg] no competitors parsed for", item.sku);
-    return;
-  }
+/**
+ * Ждёт shop:snapshot с конкретным sku или таймаут.
+ * Резолвится `true` если snapshot пришёл, `false` если timeout.
+ */
+function waitForSnapshot(sku: string, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      chrome.runtime.onMessage.removeListener(handler);
+      resolve(false);
+    }, timeoutMs);
+    function handler(rawMsg: unknown): void {
+      const m = rawMsg as ExtensionMessage;
+      if (m?.type === "shop:snapshot" && m.payload?.sku === sku) {
+        clearTimeout(timer);
+        chrome.runtime.onMessage.removeListener(handler);
+        resolve(true);
+      }
+    }
+    chrome.runtime.onMessage.addListener(handler);
+  });
+}
 
-  const lastSeen = (await getLastSeen(item.sku)) ?? [];
-  const newDumpers = findNewDumpers(competitors, lastSeen, item.myPrice, threshold, item.blacklistedShopIds);
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
-  // Обновляем сохранённое состояние
-  const minCompetitor = competitors.reduce<number | null>(
+// --- helpers: dumper detection ---------------------------------------------
+
+function computeMin(competitors: Competitor[]): number | null {
+  return competitors.reduce<number | null>(
     (min, c) => (min == null ? c.price : c.price < min ? c.price : min),
     null,
   );
-  const dumpers = computeDumpers(competitors, item.myPrice, item.blacklistedShopIds, threshold);
-  await updateWatchlistItem(item.sku, {
-    minCompetitorPrice: minCompetitor,
-    lastCheckedAt: Date.now(),
-    dumpersCount: dumpers.length,
-  });
-  await setLastSeen(item.sku, competitors);
-
-  // Алертим только о новых демперах (которых не было в прошлом снапшоте)
-  for (const d of newDumpers) {
-    await sendDumpNotification(item, d);
-  }
-}
-
-async function fetchKaspiPage(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "ru-RU,ru;q=0.9",
-      },
-    });
-    if (!res.ok) return null;
-    return await res.text();
-  } catch (err) {
-    console.warn("[Margli/bg] fetch failed", url, err);
-    return null;
-  }
 }
 
 function findNewDumpers(
@@ -190,19 +259,17 @@ function findNewDumpers(
   threshold: number,
   blacklist: string[],
 ): Competitor[] {
+  if (myPrice <= 0) return [];
   const prevByShop = new Map<string, Competitor>(previous.map((c) => [c.shopId, c]));
   const dumpers: Competitor[] = [];
   for (const c of current) {
     if (blacklist.includes(c.shopId)) continue;
-    if (myPrice <= 0) continue;
     const delta = ((c.price - myPrice) / myPrice) * 100;
     if (delta > threshold) continue; // не демпер
     const prev = prevByShop.get(c.shopId);
     if (!prev) {
-      // Новый магазин = новый алерт
       dumpers.push(c);
     } else if (prev.price > c.price) {
-      // Цена снизилась → тоже новый демпинг-алерт
       dumpers.push(c);
     }
   }
@@ -213,7 +280,7 @@ function computeDumpers(
   competitors: Competitor[],
   myPrice: number,
   blacklist: string[],
-  threshold = -5,
+  threshold: number,
 ): Competitor[] {
   if (myPrice <= 0) return [];
   return competitors.filter((c) => {

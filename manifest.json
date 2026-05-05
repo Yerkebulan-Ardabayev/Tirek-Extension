@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Margli — Kaspi анти-демпинг",
+  "name": "Margli — Kaspi анти-демпинг (ALPHA)",
   "version": "0.1.0",
-  "description": "Реальная маржа и анти-демпинг для селлеров Kaspi.kz",
+  "version_name": "0.1.0-alpha.1",
+  "description": "Реальная маржа и анти-демпинг для селлеров Kaspi.kz. Альфа-версия для закрытого теста.",
   "permissions": ["storage", "alarms", "notifications", "activeTab"],
   "host_permissions": ["https://kaspi.kz/*", "https://*.kaspi.kz/*"],
   "background": {

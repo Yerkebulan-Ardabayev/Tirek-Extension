@@ -77,6 +77,20 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+.app-header .alpha-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  margin-left: 4px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--warn), #f97316);
+  color: #1a1625;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 
 .tabs {
   display: flex;
