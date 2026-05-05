@@ -122,6 +122,22 @@ export function Settings() {
         </div>
       </div>
 
+      <div className="section-title">Privacy</div>
+      <div className="form-row toggle">
+        <label htmlFor="telemetry">Помочь улучшить плагин (анонимная статистика)</label>
+        <input
+          id="telemetry"
+          type="checkbox"
+          checked={s.telemetryEnabled}
+          onChange={(e) => update({ telemetryEnabled: e.target.checked })}
+        />
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>
+        Раз в сутки разработчик получает: install_id (UUID), версия плагина,
+        счётчики «открыл карточку / добавил в watchlist / открыл калькулятор».
+        Цены, SKU, имя магазина и ссылки — НЕ отправляются.
+      </div>
+
       <div className="hr" />
 
       <div style={{ fontSize: 11, color: "var(--text-muted)" }}>

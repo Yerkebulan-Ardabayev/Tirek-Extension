@@ -35,6 +35,9 @@ export const DEFAULT_SETTINGS: SellerSettings = {
   alertsEnabled: true,
   // -5% — та же константа, что в margli-preview/app/[locale]/check/page.tsx
   dumpingThresholdPct: -5,
+  // Privacy-first: телеметрия выключена по умолчанию, селлер сам включает
+  // через onboarding-чекбокс или toggle в Settings.
+  telemetryEnabled: false,
 };
 
 // --- helper'ы доступа к chrome.storage --------------------------------------

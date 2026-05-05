@@ -5,6 +5,7 @@ import { MarginCalculator } from "./MarginCalculator";
 import { Settings } from "./Settings";
 import { Onboarding } from "./Onboarding";
 import { getSettings } from "../lib/storage";
+import { trackEvent } from "../lib/telemetry";
 
 type Tab = "today" | "watch" | "calc" | "settings";
 
@@ -84,7 +85,10 @@ export function App() {
           <button
             key={t.id}
             className={"tab" + (tab === t.id ? " active" : "")}
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setTab(t.id);
+              if (t.id === "calc") void trackEvent("calc_opened");
+            }}
           >
             {t.label}
           </button>

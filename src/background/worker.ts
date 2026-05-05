@@ -27,10 +27,13 @@ import {
   setLastSeen,
   updateWatchlistItem,
 } from "../lib/storage";
+import { flushTelemetry, getOrCreateTelemetryMeta, trackError, trackEvent } from "../lib/telemetry";
 import type { Competitor, ExtensionMessage, ShopPageSnapshot, WatchlistItem } from "../lib/types";
 
 const ALARM_NAME = "margli:recheck";
 const RECHECK_PERIOD_MIN = 30;
+const TELEMETRY_ALARM_NAME = "margli:telemetry-flush";
+const TELEMETRY_PERIOD_MIN = 24 * 60; // 1 раз в сутки
 
 /** Сколько ждём snapshot от content script для одного URL. */
 const SNAPSHOT_TIMEOUT_MS = 25_000;
@@ -40,20 +43,27 @@ const PAUSE_BETWEEN_URLS_MS = 2_000;
 
 // --- alarms -----------------------------------------------------------------
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   console.log("[Margli/bg] onInstalled");
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
+  chrome.alarms.create(TELEMETRY_ALARM_NAME, { periodInMinutes: TELEMETRY_PERIOD_MIN });
+  // Зарегистрировать install_id при первой установке
+  await getOrCreateTelemetryMeta();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   console.log("[Margli/bg] onStartup");
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
+  chrome.alarms.create(TELEMETRY_ALARM_NAME, { periodInMinutes: TELEMETRY_PERIOD_MIN });
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_NAME) {
     console.log("[Margli/bg] alarm fired");
     await runRecheck();
+  } else if (alarm.name === TELEMETRY_ALARM_NAME) {
+    const result = await flushTelemetry();
+    console.log("[Margli/bg] telemetry flush", result);
   }
 });
 
@@ -158,6 +168,7 @@ async function handleSnapshot(snap: ShopPageSnapshot): Promise<void> {
   );
   for (const d of newDumpers) {
     await sendDumpNotification(watched, d);
+    void trackEvent("dumper_alert_sent");
   }
 }
 
@@ -203,11 +214,14 @@ async function runRecheck(): Promise<void> {
         // двигаемся дальше, не блокируем весь цикл.
         const ok = await waitForSnapshot(item.sku, SNAPSHOT_TIMEOUT_MS);
         console.log("[Margli/bg] recheck", item.sku, ok ? "ok" : "timeout");
+        if (!ok) void trackError("recheck_snapshot_timeout");
       } catch (err) {
         console.warn("[Margli/bg] recheck item failed", item.sku, err);
+        void trackError("recheck_item_failed");
       }
       await sleep(PAUSE_BETWEEN_URLS_MS);
     }
+    void trackEvent("recheck_completed");
   } finally {
     try {
       await chrome.windows.remove(win.id);

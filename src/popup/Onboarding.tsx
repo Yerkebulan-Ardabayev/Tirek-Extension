@@ -19,6 +19,7 @@ export function Onboarding({ onDone, onSkip }: Props) {
   const [taxRegime, setTaxRegime] =
     useState<SellerSettings["taxRegime"]>("ip-uproshenka");
   const [categoryId, setCategoryId] = useState("electronics");
+  const [telemetryEnabled, setTelemetryEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
@@ -27,6 +28,7 @@ export function Onboarding({ onDone, onSkip }: Props) {
       myShopId: shopName.trim() || null,
       taxRegime,
       defaultCategoryId: categoryId,
+      telemetryEnabled,
     });
     setBusy(false);
     onDone(next);
@@ -116,6 +118,34 @@ export function Onboarding({ onDone, onSkip }: Props) {
         </div>
       </div>
 
+      <div
+        className="form-row toggle"
+        style={{
+          marginTop: 18,
+          padding: "10px 12px",
+          background: "var(--bg-elev)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+        }}
+      >
+        <label htmlFor="telemetry" style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>
+            Помочь улучшить плагин
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>
+            Раз в день шлёт счётчики использования (без цен, SKU и имени магазина).
+            Помогает разработчику видеть какие фичи работают, что падает.
+            Можно выключить в любой момент в Настройках.
+          </div>
+        </label>
+        <input
+          id="telemetry"
+          type="checkbox"
+          checked={telemetryEnabled}
+          onChange={(e) => setTelemetryEnabled(e.target.checked)}
+        />
+      </div>
+
       <div className="btn-row">
         <button
           type="button"
@@ -143,8 +173,8 @@ export function Onboarding({ onDone, onSkip }: Props) {
           lineHeight: 1.4,
         }}
       >
-        Все данные хранятся локально в вашем Chrome. Margli ничего не отправляет
-        на серверы и не требует регистрации.
+        Все данные о ценах, маржах и магазинах хранятся локально в вашем Chrome.
+        Margli не требует регистрации и не передаёт коммерческую информацию.
       </div>
     </div>
   );

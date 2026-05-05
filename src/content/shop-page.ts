@@ -13,6 +13,7 @@ import {
   getSettings,
   getWatchlist,
 } from "../lib/storage";
+import { trackError, trackEvent } from "../lib/telemetry";
 import type { Competitor, ShopPageSnapshot, WatchlistItem } from "../lib/types";
 import { mountOverlay, type OverlayState } from "./overlay";
 
@@ -67,8 +68,10 @@ async function run(): Promise<void> {
   const snapshot = parseShopPage();
   if (!snapshot.productName && snapshot.competitors.length === 0) {
     console.log("[Margli] nothing useful on this page, abort");
+    void trackError("shop_parser_empty");
     return;
   }
+  void trackEvent("shop_page_parsed");
 
   const settings = await getSettings();
   const myShopName = settings.myShopId;
@@ -148,6 +151,7 @@ async function addToWatchlistFromSnapshot(
     dumpersCount: dumpers.length,
   };
   await addToWatchlist(item);
+  void trackEvent("watchlist_added");
   return true;
 }
 

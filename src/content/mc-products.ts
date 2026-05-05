@@ -12,6 +12,7 @@
 import { findOrderRows, findProductRows } from "../lib/kaspi-mc-parser";
 import { calculateMargin } from "../lib/margin-calc";
 import { getAllCostProfiles, getSettings, getWatchlist } from "../lib/storage";
+import { trackEvent } from "../lib/telemetry";
 
 console.log("[Margli] mc content script loaded", location.href);
 
@@ -43,6 +44,7 @@ async function run(): Promise<void> {
     }
     removeBanner();
     parserAttempts = 0;
+    void trackEvent("mc_parser_ok");
 
     for (const row of rows) {
       if (!row.sku || !row.price) continue;
@@ -105,6 +107,7 @@ async function run(): Promise<void> {
     }
     removeBanner();
     parserAttempts = 0;
+    void trackEvent("mc_parser_ok");
 
     for (const row of rows) {
       if (!row.sku || !row.price) continue;
@@ -146,6 +149,7 @@ function onEmpty(): void {
 
 function showBanner(): void {
   if (document.getElementById(BANNER_ID)) return;
+  void trackEvent("mc_parser_empty_banner_shown");
   const div = document.createElement("div");
   div.id = BANNER_ID;
   div.innerHTML = `

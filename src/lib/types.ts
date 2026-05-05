@@ -109,6 +109,52 @@ export type SellerSettings = {
   alertsEnabled: boolean;
   /** Минимальная глубина демпинга для алерта, %. Default = -5 */
   dumpingThresholdPct: number;
+  /**
+   * Anonymous-телеметрия (раз в 24ч счётчики использования на endpoint).
+   * Default false (privacy-first). Включается через onboarding-чекбокс
+   * или toggle в Settings.
+   * Что собирается — см. lib/telemetry.ts шапка.
+   */
+  telemetryEnabled: boolean;
+};
+
+/**
+ * Локальные счётчики событий за текущее окно (≤ 24ч).
+ * Хранятся в chrome.storage.local под ключом `margli:telemetry-counters`.
+ * Сбрасываются при удачном flush.
+ */
+export type TelemetryCounters = {
+  shop_page_parsed: number;
+  watchlist_added: number;
+  calc_opened: number;
+  mc_parser_ok: number;
+  mc_parser_empty_banner_shown: number;
+  recheck_completed: number;
+  dumper_alert_sent: number;
+  /** Map error_code → count */
+  errors: Record<string, number>;
+};
+
+/**
+ * Метаданные telemetry — install_id, версия, last_flush.
+ * Хранятся в chrome.storage.local под ключом `margli:telemetry-meta`.
+ */
+export type TelemetryMeta = {
+  /** UUID v4, генерится при первом старте, никогда не меняется. */
+  install_id: string;
+  /** ISO-дата первого старта. */
+  first_seen: string;
+  /** Timestamp последнего успешного flush'а (ms). 0 если ни разу. */
+  last_flush_at: number;
+};
+
+/** Payload, который отправляется на endpoint при flush'е. */
+export type TelemetryPayload = {
+  install_id: string;
+  version: string;
+  first_seen: string;
+  last_seen: string;
+  events_24h: TelemetryCounters;
 };
 
 /** Сообщение между content/background/popup. */
