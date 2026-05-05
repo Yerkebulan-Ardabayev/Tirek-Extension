@@ -1,25 +1,36 @@
-# Margli Chrome Extension
+# Margli — Kaspi анти-демпинг и калькулятор реальной маржи
 
-Расширение Chrome для селлеров Kaspi.kz: расчёт реальной маржи, анти-демпинг,
-наблюдение за SKU, PDF-досье жалобы.
+Расширение Chrome для селлеров Kaspi.kz: реальная маржа на карточке товара,
+подсветка демперов, наблюдение за SKU, PDF-досье жалобы. Бесплатно, локально,
+без регистрации.
 
-Manifest V3, TypeScript, React 19 (popup), vanilla TS + Shadow DOM (overlay).
+**Закрытый альфа-тест.** Manifest V3 + TypeScript strict + React 19.
 
-## Быстрый старт
+## Для тестеров → [margli landing-page](https://yerkebulan-ardabayev.github.io/Margli-Extension/)
+
+Скачайте zip, распакуйте, Load Unpacked в Chrome — 4 шага, 30 секунд.
+
+📦 **Последний релиз:** [v0.1.0-alpha.4](https://github.com/Yerkebulan-Ardabayev/Margli-Extension/releases/latest)
+
+🐛 **Баги/предложения:** [Issues](https://github.com/Yerkebulan-Ardabayev/Margli-Extension/issues)
+
+---
+
+## Для разработчиков
 
 ```bash
 pnpm install
-pnpm test     # 75+ unit-тестов на расчёты комиссий, налогов, маржи, парсера
-pnpm build    # → dist/ готов к Load Unpacked
+pnpm test       # vitest, должно быть 127/127 passed
+pnpm typecheck  # tsc --noEmit, 0 errors
+pnpm build      # → dist/ готов к Load Unpacked
+pnpm package    # build + zip → releases/margli-extension-v<version>.zip
 ```
 
-## Установка в Chrome
+### Установка локального dev-билда в Chrome
 
-1. Открой `chrome://extensions`
-2. Включи «Режим разработчика» (Developer mode) в правом верхнем углу
-3. Нажми «Загрузить распакованное» (Load Unpacked)
-4. Выбери папку `dist/` (полный путь: `C:\Users\yerke\Desktop\Margli\margli-extension\dist\`)
-5. Иконка Margli появится в панели расширений
+1. `pnpm build`
+2. `chrome://extensions` → Developer mode (тумблер справа вверху)
+3. «Загрузить распакованное» → выбрать `dist/`
 
 ## Что делает расширение
 
