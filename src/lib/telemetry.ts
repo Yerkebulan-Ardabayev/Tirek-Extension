@@ -51,11 +51,17 @@ const KEYS = {
 } as const;
 
 /**
- * Endpoint для приёма телеметрии. Подменяется на свой Cloudflare Worker URL.
- * Если оставить дефолтный (origin = margli.kz) — сначала надо задеплоить
- * worker (см. cloudflare-worker/README.md).
+ * Endpoint для приёма телеметрии. Реализован как Next.js API route в
+ * margli-preview (тот же домен margli.kz, отдельный репо). Деплой —
+ * автоматический при `git push` в `Yerkebulan-Ardabayev/Margli` через
+ * Vercel webhook.
+ *
+ * Источник: `margli-preview/app/api/telemetry/route.ts`.
+ *
+ * Чтобы переключить на dev/staging — поменять только эту константу и
+ * пересобрать плагин через `pnpm package`.
  */
-export const TELEMETRY_ENDPOINT = "https://api.margli.kz/api/telemetry";
+export const TELEMETRY_ENDPOINT = "https://margli.kz/api/telemetry";
 
 /** Минимальный интервал между двумя flush'ами — 22ч (с запасом 2ч от alarm 24ч). */
 const MIN_FLUSH_INTERVAL_MS = 22 * 60 * 60 * 1000;
