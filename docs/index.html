@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Margli — Kaspi анти-демпинг и реальная маржа</title>
+    <meta
+      name="description"
+      content="Бесплатное расширение Chrome для селлеров Kaspi.kz. Видишь демперов на каждой карточке + считает реальную маржу с учётом комиссий и налогов РК 2026."
+    />
+    <meta property="og:title" content="Margli — Kaspi анти-демпинг" />
+    <meta
+      property="og:description"
+      content="Реальная маржа и анти-демпинг прямо на kaspi.kz. Без регистрации, без подписки."
+    />
+    <style>
+      :root {
+        --bg: #0f0a1c;
+        --bg-elev: #1a1426;
+        --bg-card: #221a33;
+        --text: #f5f3ff;
+        --text-muted: #a1a1aa;
+        --border: rgba(167, 139, 250, 0.2);
+        --brand: #a78bfa;
+        --brand-strong: #7c3aed;
+        --warn: #f59e0b;
+        --success: #10b981;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.55;
+      }
+      a {
+        color: var(--brand);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .container {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      /* Header */
+      header.top {
+        padding: 20px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        font-size: 18px;
+      }
+      .brand .mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--brand-strong), var(--brand));
+        color: #fff;
+      }
+      .brand .pill {
+        margin-left: 6px;
+        padding: 2px 8px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--warn), #f97316);
+        color: #1a1426;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      /* Hero */
+      .hero {
+        padding: 60px 0 40px;
+        text-align: center;
+      }
+      .hero h1 {
+        font-size: 48px;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+        margin: 0 0 16px;
+        font-weight: 800;
+      }
+      .hero h1 .accent {
+        background: linear-gradient(135deg, var(--brand), #c4b5fd);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .hero p.lede {
+        font-size: 19px;
+        color: var(--text-muted);
+        max-width: 620px;
+        margin: 0 auto 32px;
+      }
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 28px;
+        background: linear-gradient(135deg, var(--brand-strong), var(--brand));
+        color: #fff;
+        font-size: 17px;
+        font-weight: 700;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(124, 58, 237, 0.3);
+        text-decoration: none;
+        transition: transform 0.15s;
+      }
+      .cta:hover {
+        transform: translateY(-2px);
+        text-decoration: none;
+      }
+      .cta .size {
+        font-size: 13px;
+        font-weight: 500;
+        opacity: 0.85;
+      }
+      .cta-meta {
+        margin-top: 14px;
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      /* Features grid */
+      section {
+        padding: 50px 0;
+        border-top: 1px solid var(--border);
+      }
+      h2 {
+        font-size: 28px;
+        margin: 0 0 24px;
+        letter-spacing: -0.02em;
+        font-weight: 800;
+      }
+      .features {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+      }
+      .feature {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px 22px;
+      }
+      .feature .ico {
+        font-size: 24px;
+        margin-bottom: 8px;
+      }
+      .feature h3 {
+        font-size: 16px;
+        margin: 0 0 6px;
+      }
+      .feature p {
+        font-size: 14px;
+        color: var(--text-muted);
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      /* Steps */
+      .steps {
+        counter-reset: step;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 56px 1fr;
+        gap: 18px;
+        align-items: flex-start;
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 22px;
+      }
+      .step::before {
+        counter-increment: step;
+        content: counter(step);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, var(--brand-strong), var(--brand));
+        color: #fff;
+        font-weight: 800;
+        font-size: 18px;
+        border-radius: 50%;
+      }
+      .step h3 {
+        margin: 4px 0 4px;
+        font-size: 16px;
+      }
+      .step p {
+        font-size: 14px;
+        color: var(--text-muted);
+        margin: 0;
+      }
+      .step code {
+        background: rgba(167, 139, 250, 0.15);
+        color: var(--brand);
+        padding: 2px 7px;
+        border-radius: 6px;
+        font-family: "SF Mono", Menlo, Consolas, monospace;
+        font-size: 13px;
+      }
+      .step .toggle-img {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      /* FAQ */
+      .faq details {
+        border-bottom: 1px solid var(--border);
+        padding: 14px 0;
+      }
+      .faq summary {
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 15px;
+        list-style: none;
+      }
+      .faq summary::-webkit-details-marker {
+        display: none;
+      }
+      .faq summary::before {
+        content: "+ ";
+        color: var(--brand);
+        font-weight: 800;
+      }
+      .faq details[open] summary::before {
+        content: "− ";
+      }
+      .faq p {
+        color: var(--text-muted);
+        font-size: 14px;
+        margin: 10px 0 0;
+      }
+
+      /* Privacy */
+      .privacy {
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        border-radius: 14px;
+        padding: 20px 22px;
+      }
+      .privacy h2 {
+        font-size: 18px;
+        color: var(--success);
+        margin: 0 0 8px;
+      }
+      .privacy p {
+        font-size: 14px;
+        color: var(--text);
+        margin: 0;
+      }
+
+      /* Footer */
+      footer {
+        padding: 40px 0;
+        text-align: center;
+        font-size: 13px;
+        color: var(--text-muted);
+        border-top: 1px solid var(--border);
+      }
+      footer a {
+        margin: 0 8px;
+      }
+
+      @media (max-width: 600px) {
+        .hero h1 {
+          font-size: 32px;
+        }
+        .features {
+          grid-template-columns: 1fr;
+        }
+        .step {
+          grid-template-columns: 40px 1fr;
+        }
+        .step::before {
+          width: 32px;
+          height: 32px;
+          font-size: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="container">
+        <div class="brand">
+          <span class="mark">M</span>
+          <span>Margli</span>
+          <span class="pill">ALPHA</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Hero -->
+      <section class="hero">
+        <div class="container">
+          <h1>
+            Kaspi-демперы и <span class="accent">реальная маржа</span>
+            <br />прямо на карточке товара
+          </h1>
+          <p class="lede">
+            Бесплатное расширение Chrome для селлеров Kaspi.kz. Считает
+            прибыль с учётом комиссий и налогов РК 2026, подсвечивает магазины
+            которые сбивают цену.
+          </p>
+          <a
+            class="cta"
+            href="https://github.com/Yerkebulan-Ardabayev/Margli-Extension/releases/latest"
+            target="_blank"
+            rel="noreferrer"
+          >
+            ⬇ Скачать Margli
+            <span class="size">v0.1.0-alpha · 1 MB · zip</span>
+          </a>
+          <div class="cta-meta">
+            Требуется Chrome 116+ или любой Chromium-браузер (Edge, Brave,
+            Yandex). Установка за 4 шага — инструкция ниже.
+          </div>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section>
+        <div class="container">
+          <h2>Что умеет</h2>
+          <div class="features">
+            <div class="feature">
+              <div class="ico">🛡</div>
+              <h3>Анти-демпинг overlay</h3>
+              <p>
+                На каждой карточке товара показывает всех конкурентов отсортированных
+                по цене. Подсвечивает магазины с ценой на ≥5% ниже вашей — это
+                демперы.
+              </p>
+            </div>
+            <div class="feature">
+              <div class="ico">📊</div>
+              <h3>Реальная маржа</h3>
+              <p>
+                Калькулятор учитывает комиссию Kaspi (по категориям), эквайринг
+                Kaspi Pay, доставку, рекламу, возвраты, налоги РК 2026
+                (упрощёнка / ОУР / НДС 16%).
+              </p>
+            </div>
+            <div class="feature">
+              <div class="ico">🔔</div>
+              <h3>Фоновое наблюдение</h3>
+              <p>
+                Добавьте товары в watchlist — плагин раз в 30 минут проверяет
+                цены конкурентов, шлёт push-уведомление при появлении нового
+                демпера.
+              </p>
+            </div>
+            <div class="feature">
+              <div class="ico">📄</div>
+              <h3>PDF-досье</h3>
+              <p>
+                В один клик генерирует досье жалобы для Kaspi: ваш товар, ваша
+                цена, список демперов с дельтами и кол-вом отзывов, дата.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Install -->
+      <section>
+        <div class="container">
+          <h2>Установка за 4 шага</h2>
+          <div class="steps">
+            <div class="step">
+              <div>
+                <h3>Скачать zip</h3>
+                <p>
+                  Жмите большую кнопку «Скачать Margli» вверху страницы — это
+                  zip-архив примерно на 1 МБ.
+                </p>
+              </div>
+            </div>
+            <div class="step">
+              <div>
+                <h3>Распаковать в постоянную папку</h3>
+                <p>
+                  Например в <code>C:\Программы\Margli\</code> или
+                  <code>~/Apps/Margli/</code>. <strong>Не на рабочий стол временно</strong>
+                  — Chrome привязывает расширение к этой конкретной папке. Если
+                  её удалить — плагин перестанет работать.
+                </p>
+              </div>
+            </div>
+            <div class="step">
+              <div>
+                <h3>Открыть <code>chrome://extensions</code></h3>
+                <p>
+                  Скопируйте этот адрес в адресную строку. В правом верхнем
+                  углу включите тумблер <strong>«Режим разработчика»</strong>
+                  (Developer mode).
+                </p>
+                <p class="toggle-img">
+                  💡 Этот режим нужен только потому что плагин в закрытом
+                  альфа-тесте, не в Chrome Web Store. Никаких рисков для вашего
+                  Chrome это не несёт.
+                </p>
+              </div>
+            </div>
+            <div class="step">
+              <div>
+                <h3>Загрузить распакованное</h3>
+                <p>
+                  Нажмите «Загрузить распакованное» (Load unpacked) → выберите
+                  папку из шага 2 → готово. Иконка <strong>M</strong> Margli
+                  появится в панели расширений.
+                </p>
+                <p class="toggle-img">
+                  Если иконку не видно — нажмите на пазл 🧩 справа от адресной
+                  строки и закрепите Margli булавкой.
+                </p>
+              </div>
+            </div>
+          </div>
+          <p style="margin-top: 24px; font-size: 14px; color: var(--text-muted)">
+            Откройте любой свой товар на kaspi.kz/shop/p/... — справа внизу
+            появится боковая панель со списком всех продавцов и подсветкой
+            демперов.
+          </p>
+        </div>
+      </section>
+
+      <!-- Privacy -->
+      <section>
+        <div class="container">
+          <div class="privacy">
+            <h2>🔒 Приватность</h2>
+            <p>
+              Все данные о ваших ценах, маржах и товарах хранятся
+              <strong>локально в вашем Chrome</strong>. Margli не имеет
+              серверов, не требует регистрации, не передаёт коммерческую
+              информацию никуда. Telemetry-чекбокс в onboarding выключен по
+              умолчанию.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section>
+        <div class="container faq">
+          <h2>Частые вопросы</h2>
+          <details>
+            <summary>Margli может списать что-то с моего Kaspi?</summary>
+            <p>
+              Нет. Расширение только читает страницы, которые вы и так
+              открываете. Никаких клик-автоматизаций, никаких API-вызовов,
+              никаких изменений в кабинете.
+            </p>
+          </details>
+          <details>
+            <summary>А Kaspi не забанит за расширение?</summary>
+            <p>
+              Margli работает как Tampermonkey или AdBlock — анализирует то,
+              что и так у вас на экране. Это не нарушает Terms of Service Kaspi.
+            </p>
+          </details>
+          <details>
+            <summary>Зачем включать «Режим разработчика»?</summary>
+            <p>
+              Плагин в закрытом альфа-тесте — пока не публикуется в Chrome Web
+              Store. Developer mode нужен только чтобы загрузить плагин из
+              папки. Никаких рисков для Chrome или ваших данных это не несёт.
+              После публичного релиза не понадобится.
+            </p>
+          </details>
+          <details>
+            <summary>Куда уходят мои данные о ценах и марже?</summary>
+            <p>
+              Никуда. Всё хранится в <code>chrome.storage.local</code> на вашем
+              устройстве. Для обычной работы интернет не нужен.
+            </p>
+          </details>
+          <details>
+            <summary>Как сообщить о баге или предложить фичу?</summary>
+            <p>
+              Жмите кнопку Telegram внизу страницы — там общий чат тестеров.
+              Можно скриншоты, видео, голосовые. Альтернатива —
+              <a
+                href="https://github.com/Yerkebulan-Ardabayev/Margli-Extension/issues"
+                target="_blank"
+                rel="noreferrer"
+                >GitHub Issues</a
+              >.
+            </p>
+          </details>
+          <details>
+            <summary>Расширение пропало после перезагрузки</summary>
+            <p>
+              Вы вероятно удалили или переместили папку с распакованным zip.
+              Распакуйте заново и снова Load Unpacked.
+            </p>
+          </details>
+          <details>
+            <summary>Будут ли обновления?</summary>
+            <p>
+              Да. Когда выходит новая версия — придёт сообщение в Telegram-чат
+              + новый zip на этой странице. Распаковываете поверх старой папки,
+              в <code>chrome://extensions</code> жмёте 🔄 у Margli.
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <p>
+          Margli alpha · бесплатно · open-source
+          <br />
+          <a
+            href="https://github.com/Yerkebulan-Ardabayev/Margli-Extension"
+            target="_blank"
+            rel="noreferrer"
+            >GitHub</a
+          >
+          ·
+          <a
+            href="https://github.com/Yerkebulan-Ardabayev/Margli-Extension/issues"
+            target="_blank"
+            rel="noreferrer"
+            >Сообщить о баге</a
+          >
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

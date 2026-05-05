@@ -195,6 +195,17 @@ describe("flushTelemetry", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("при пустом endpoint — no-op даже когда opt-in включен", async () => {
+    setSettings({ telemetryEnabled: true });
+    const fetchSpy = vi.fn();
+    (globalThis as { fetch: typeof fetch }).fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await flushTelemetry("");
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toBe("no-endpoint");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("при http-ошибке НЕ обнуляет счётчики", async () => {
     await trackEvent("shop_page_parsed");
     await getOrCreateTelemetryMeta();

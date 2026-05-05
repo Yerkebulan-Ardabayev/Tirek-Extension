@@ -51,17 +51,25 @@ const KEYS = {
 } as const;
 
 /**
- * Endpoint для приёма телеметрии. Реализован как Next.js API route в
- * margli-preview (тот же домен margli.kz, отдельный репо). Деплой —
- * автоматический при `git push` в `Yerkebulan-Ardabayev/Margli` через
- * Vercel webhook.
+ * Endpoint для приёма телеметрии. Если пустая строка — flush() становится
+ * no-op (даже если selлер включил opt-in галочку). Так плагин не пытается
+ * стучать в несуществующий endpoint и не плодит сетевые ошибки в console.
  *
- * Источник: `margli-preview/app/api/telemetry/route.ts`.
+ * Когда захотим включить учёт тестеров — впиши сюда URL Google Apps Script
+ * Web App (5 минут настройки):
+ *   1. Создать пустую Google Sheet «Margli тестеры»
+ *   2. Расширения → Apps Script → вставить doPost (см. README, раздел
+ *      «Включить учёт тестеров»)
+ *   3. Deploy → Web app → Execute as «Me» / Access «Anyone» → скопировать URL
+ *   4. Вставить URL ниже → пересобрать `pnpm package` → раздать новый zip
  *
- * Чтобы переключить на dev/staging — поменять только эту константу и
- * пересобрать плагин через `pnpm package`.
+ * URL будет вида:
+ *   https://script.google.com/macros/s/AKfycb.../exec
+ *
+ * Альтернатива — любой свой backend: Vercel API route, Cloudflare Worker,
+ * etc. Главное — он должен принимать POST с JSON и возвращать 2xx.
  */
-export const TELEMETRY_ENDPOINT = "https://margli.kz/api/telemetry";
+export const TELEMETRY_ENDPOINT = "";
 
 /** Минимальный интервал между двумя flush'ами — 22ч (с запасом 2ч от alarm 24ч). */
 const MIN_FLUSH_INTERVAL_MS = 22 * 60 * 60 * 1000;
@@ -240,6 +248,9 @@ export async function flushTelemetry(
   endpoint: string = TELEMETRY_ENDPOINT,
   now: number = Date.now(),
 ): Promise<{ status: "ok" | "skipped" | "error"; reason?: string }> {
+  if (!endpoint || endpoint.length === 0) {
+    return { status: "skipped", reason: "no-endpoint" };
+  }
   const settings = await getSettings();
   if (!settings.telemetryEnabled) {
     return { status: "skipped", reason: "disabled" };
