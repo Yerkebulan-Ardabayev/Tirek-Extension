@@ -135,6 +135,30 @@
         font-weight: 500;
         opacity: 0.85;
       }
+      .cta-tg {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 28px;
+        background: #2B9FD9;
+        color: #fff;
+        font-size: 17px;
+        font-weight: 700;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(43, 159, 217, 0.3);
+        text-decoration: none;
+        transition: transform 0.15s;
+      }
+      .cta-tg:hover {
+        transform: translateY(-2px);
+        text-decoration: none;
+      }
+      .cta-row {
+        display: flex;
+        gap: 14px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
       .cta-meta {
         margin-top: 14px;
         font-size: 13px;
@@ -332,15 +356,25 @@
             прибыль с учётом комиссий и налогов РК 2026, подсвечивает магазины
             которые сбивают цену.
           </p>
-          <a
-            class="cta"
-            href="https://github.com/Yerkebulan-Ardabayev/Margli-Extension/releases/latest"
-            target="_blank"
-            rel="noreferrer"
-          >
-            ⬇ Скачать Margli
-            <span class="size">v0.1.0-alpha · 1 MB · zip</span>
-          </a>
+          <div class="cta-row">
+            <a
+              class="cta"
+              href="https://github.com/Yerkebulan-Ardabayev/Margli-Extension/releases/latest"
+              target="_blank"
+              rel="noreferrer"
+            >
+              ⬇ Скачать Margli
+              <span class="size">v0.1.0-alpha · 1 MB · zip</span>
+            </a>
+            <a
+              class="cta-tg"
+              href="https://t.me/margli_bot"
+              target="_blank"
+              rel="noreferrer"
+            >
+              ✈ Написать в Telegram
+            </a>
+          </div>
           <div class="cta-meta">
             Требуется Chrome 116+ или любой Chromium-браузер (Edge, Brave,
             Yandex). Установка за 4 шага — инструкция ниже.
