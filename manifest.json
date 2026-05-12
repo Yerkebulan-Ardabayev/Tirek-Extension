@@ -45,7 +45,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["content/overlay.css"],
+      "resources": ["content/overlay.css", "fonts/PTSans-Regular.ttf"],
       "matches": ["https://kaspi.kz/*", "https://*.kaspi.kz/*"]
     }
   ]

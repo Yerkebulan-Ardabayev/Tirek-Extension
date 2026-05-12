@@ -120,8 +120,8 @@ async function run(): Promise<void> {
   console.log("[Margli] mounting overlay", { myPrice, myShopName, isWatched });
   mountOverlay(state, {
     onWatch: async (snap) => addToWatchlistFromSnapshot(snap, myPrice, snap.competitors),
-    onDossier: (snap, dumpers) => {
-      const blob = generateDossierPdf({
+    onDossier: async (snap, dumpers) => {
+      const blob = await generateDossierPdf({
         myShopName: myShopName ?? "Мой магазин",
         myPrice: myPrice ?? 0,
         snapshot: snap,

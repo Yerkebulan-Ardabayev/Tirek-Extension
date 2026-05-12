@@ -257,6 +257,13 @@ async function main() {
     join(DIST, "content", "overlay.css"),
   );
 
+  console.log("[build] fonts");
+  await mkdir(join(DIST, "fonts"), { recursive: true });
+  await copyFile(
+    join(ROOT, "public", "fonts", "PTSans-Regular.ttf"),
+    join(DIST, "fonts", "PTSans-Regular.ttf"),
+  );
+
   console.log("[build] popup");
   await build({
     entryPoints: [join(SRC, "popup", "main.tsx")],
