@@ -10,7 +10,7 @@
 
 Скачайте zip, распакуйте, Load Unpacked в Chrome — 4 шага, 30 секунд.
 
-📦 **Последний релиз:** [v0.1.0-alpha.5](https://github.com/Yerkebulan-Ardabayev/Margli-Extension/releases/latest)
+📦 **Последний релиз:** [v0.1.0-alpha.6](https://github.com/Yerkebulan-Ardabayev/Margli-Extension/releases/latest)
 
 🐛 **Баги/предложения:** [Issues](https://github.com/Yerkebulan-Ardabayev/Margli-Extension/issues)
 
