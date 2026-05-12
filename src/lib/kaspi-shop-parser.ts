@@ -178,6 +178,36 @@ export function parsePriceText(raw: string | null | undefined): number | null {
 // --- competitors ------------------------------------------------------------
 
 function extractCompetitors(doc: Document): Competitor[] {
+  // Шаг 1 — точечные BEM-селекторы Kaspi (старый стабильный путь).
+  const bem = extractCompetitorsBem(doc);
+  if (bem.length > 0) {
+    log("competitors via BEM selectors:", bem.length);
+    return bem;
+  }
+
+  // Шаг 2 — таблица с классом «sellers-table*» (новый дизайн Kaspi 2026,
+  // где у <th> нет текста, а строки внутри tbody без BEM-классов). Имя
+  // магазина берём из <a>, цену — максимум среди всех ₸-чисел в строке
+  // (так отбрасываем колонку «В рассрочку» автоматически).
+  const byTableClass = extractCompetitorsByStructure(doc);
+  if (byTableClass.length > 0) {
+    log("competitors via structural heuristic:", byTableClass.length);
+    return byTableClass;
+  }
+
+  // Шаг 3 — эвристика по заголовкам (классический <thead><th>Продавец</th>...).
+  // Запасной путь для случаев, когда таблица не sellers-* по классам.
+  const byHeaders = extractCompetitorsByTableHeaders(doc);
+  if (byHeaders.length > 0) {
+    log("competitors via table-headers heuristic:", byHeaders.length);
+    return byHeaders;
+  }
+
+  log("no competitor rows found (3 strategies failed)");
+  return [];
+}
+
+function extractCompetitorsBem(doc: Document): Competitor[] {
   const ROW_SELECTORS = [
     ".sellers-table__row",
     ".sellers-table tr.sellers-table__row",
@@ -191,14 +221,11 @@ function extractCompetitors(doc: Document): Competitor[] {
     const list = doc.querySelectorAll(sel);
     if (list.length > 0) {
       rows = list;
-      log("competitors using selector", sel, "rows:", list.length);
+      log("BEM rows from selector", sel, "→", list.length);
       break;
     }
   }
-  if (!rows) {
-    log("no competitor rows found");
-    return [];
-  }
+  if (!rows) return [];
 
   const competitors: Competitor[] = [];
 
@@ -241,11 +268,7 @@ function extractCompetitors(doc: Document): Competitor[] {
     const rating = parseFloatSafe(ratingText);
 
     if (price != null && price > 0) {
-      const item: Competitor = {
-        shopId,
-        shopName,
-        price,
-      };
+      const item: Competitor = { shopId, shopName, price };
       if (reviewsCount != null) item.reviewsCount = reviewsCount;
       if (rating != null) item.rating = rating;
       if (shopUrl) item.shopUrl = shopUrl;
@@ -254,6 +277,211 @@ function extractCompetitors(doc: Document): Competitor[] {
   });
 
   return competitors;
+}
+
+/**
+ * Парсер по структуре таблицы (без анализа заголовков).
+ *
+ * Сценарий Kaspi 2026: <table class="sellers-table__self"> с пустыми
+ * <th> (заголовки рендерятся через CSS), внутри tbody — <tr> без
+ * предсказуемых классов. Что в них стабильно:
+ *   • первая (или единственная) <a> — это ссылка на магазин и его имя;
+ *   • в строке есть несколько чисел в ₸ — реальная цена и «в рассрочку».
+ *     Реальная цена всегда МАКСИМАЛЬНАЯ (рассрочка = цена/N мес).
+ *
+ * Этого достаточно — не зависит от классов, переживёт следующий редизайн.
+ */
+function extractCompetitorsByStructure(doc: Document): Competitor[] {
+  // Сначала ищем таблицу по class-hint'у «sellers» — у Kaspi это
+  // консервативный нэйминг с 2020-х, маловероятно что уйдёт целиком.
+  const candidates: Element[] = [];
+  doc
+    .querySelectorAll('table[class*="sellers"], table[class*="seller"], table[class*="merchant"]')
+    .forEach((t) => candidates.push(t));
+  // Fallback: вообще любые <table> — отфильтруем по содержимому ниже.
+  if (candidates.length === 0) {
+    doc.querySelectorAll("table").forEach((t) => candidates.push(t));
+  }
+
+  for (const table of candidates) {
+    const rows = collectDataRows(table);
+    if (rows.length < 1) continue;
+
+    const competitors: Competitor[] = [];
+    rows.forEach((tr, idx) => {
+      const parsed = parseSellerRow(tr, idx);
+      if (parsed) competitors.push(parsed);
+    });
+
+    // Sanity: если в "таблице" нашлась только одна строка с ссылкой и ценой —
+    // скорее всего это не таблица продавцов, а какой-то блок «купить сейчас».
+    // Таблица продавцов Kaspi всегда имеет ≥ 1 строки, но требуем 1+ — для
+    // случая «один продавец на карточке» это нормально. Главный фильтр —
+    // что parseSellerRow вернул не-null (есть и имя, и цена).
+    if (competitors.length > 0) {
+      return competitors;
+    }
+  }
+  return [];
+}
+
+function parseSellerRow(tr: Element, idx: number): Competitor | null {
+  // Имя магазина — первая <a> в строке с непустым текстом
+  const link = Array.from(tr.querySelectorAll("a")).find(
+    (a) => (a.textContent ?? "").trim().length > 0,
+  );
+  const linkText = link?.textContent?.trim();
+  const shopUrl = link?.getAttribute("href") ?? null;
+
+  // Альтернатива: ячейка с текстом без явной ссылки — берём первый
+  // непустой td (например для строк с собственным магазином без ссылки).
+  let shopName = linkText ?? "";
+  if (!shopName) {
+    const firstCell = tr.querySelector("td");
+    if (firstCell) {
+      const raw = (firstCell.textContent ?? "").trim();
+      const cut = raw.split(/\s*(?:★|\(\s*\d+\s*(?:отзыв|пікір|review))/iu)[0]?.trim();
+      shopName = cut || "";
+    }
+  }
+  if (!shopName) shopName = `Магазин ${idx + 1}`;
+
+  // Цена — максимум среди всех ₸-чисел в строке. Это автоматически
+  // отбрасывает колонку «В рассрочку» (666 ₸ vs реальная 1998 ₸).
+  const allNumbers: number[] = [];
+  tr.querySelectorAll("td, [class*='price']").forEach((cell) => {
+    const n = parsePriceText(cell.textContent);
+    if (n != null && n > 0) allNumbers.push(n);
+  });
+  if (allNumbers.length === 0) return null;
+
+  // Sanity: минимально валидная цена > 50 ₸ — отсекаем странные числа
+  // типа "(1) review" если случайно попадутся.
+  const validNumbers = allNumbers.filter((n) => n >= 50);
+  if (validNumbers.length === 0) return null;
+  const price = Math.max(...validNumbers);
+
+  const shopId = inferShopId(shopName, shopUrl);
+
+  // Кол-во отзывов из текста строки
+  const rowText = tr.textContent ?? "";
+  const reviewsMatch = rowText.match(/\((\d+)\s*(?:отзыв|пікір|review)/i);
+  const reviewsCount = reviewsMatch?.[1] ? Number(reviewsMatch[1]) : undefined;
+
+  const item: Competitor = { shopId, shopName, price };
+  if (reviewsCount != null && Number.isFinite(reviewsCount)) {
+    item.reviewsCount = reviewsCount;
+  }
+  if (shopUrl) item.shopUrl = shopUrl;
+  return item;
+}
+
+/**
+ * Эвристический парсер: ищет любую <table>, у которой среди заголовков
+ * есть колонки «Продавец / Магазин / Seller» и «Цена / Price» (но НЕ
+ * «В рассрочку» / «Рассрочка» — это отдельный столбец у Kaspi).
+ *
+ * Срабатывает когда Kaspi меняет CSS-классы (типичная история раз в 6-12 мес.).
+ * Заголовки на трёх языках Kaspi (ru/kz/en).
+ */
+function extractCompetitorsByTableHeaders(doc: Document): Competitor[] {
+  const tables = doc.querySelectorAll("table");
+  for (const table of Array.from(tables)) {
+    const map = detectSellerColumns(table);
+    if (!map) continue;
+
+    const dataRows = collectDataRows(table);
+    if (dataRows.length === 0) continue;
+
+    const competitors: Competitor[] = [];
+    dataRows.forEach((tr, idx) => {
+      const cells = tr.children;
+      const nameCell = cells[map.name] as Element | undefined;
+      const priceCell = cells[map.price] as Element | undefined;
+      if (!nameCell || !priceCell) return;
+
+      const shopName = extractShopNameFromCell(nameCell) ?? `Магазин ${idx + 1}`;
+      const price = parsePriceText(priceCell.textContent);
+      if (price == null || price <= 0) return;
+
+      const link = nameCell.querySelector("a[href]");
+      const shopUrl = link?.getAttribute("href") ?? null;
+      const shopId = inferShopId(shopName, shopUrl);
+
+      // Кол-во отзывов — best-effort из текста ячейки («(2197 отзывов)» / «(2197 пікір)»)
+      const cellText = nameCell.textContent ?? "";
+      const reviewsMatch = cellText.match(/\((\d+)\s*(?:отзыв|пікір|review)/i);
+      const reviewsCount = reviewsMatch?.[1] ? Number(reviewsMatch[1]) : undefined;
+
+      const item: Competitor = { shopId, shopName, price };
+      if (reviewsCount != null && Number.isFinite(reviewsCount)) {
+        item.reviewsCount = reviewsCount;
+      }
+      if (shopUrl) item.shopUrl = shopUrl;
+      competitors.push(item);
+    });
+
+    if (competitors.length > 0) {
+      return competitors;
+    }
+  }
+  return [];
+}
+
+type SellerColumnMap = { name: number; price: number };
+
+function detectSellerColumns(table: Element): SellerColumnMap | null {
+  // Заголовки обычно в <thead><tr>, иногда в первой <tr> вообще.
+  const headerRow =
+    table.querySelector("thead tr") ?? table.querySelector("tr");
+  if (!headerRow) return null;
+
+  const cells = Array.from(headerRow.children);
+  if (cells.length < 2) return null;
+
+  const headers = cells.map((c) => (c.textContent ?? "").trim().toLowerCase());
+
+  // НЕ используем `\b` — он в JS regex работает только по ASCII и сломан
+  // на кириллице (`/\bцена\b/.test("цена")` возвращает false).
+  // Сравниваем по точному / startsWith / includes.
+  const SHOP_WORDS = ["продавец", "магазин", "seller", "shop", "сатушы", "dúkén", "дүкен"];
+  const PRICE_WORDS = ["цена", "price", "bağa", "bagasy", "бағасы"];
+
+  const nameIdx = headers.findIndex((h) => SHOP_WORDS.some((w) => h.includes(w)));
+  const priceIdx = headers.findIndex(
+    (h) =>
+      PRICE_WORDS.some((w) => h.includes(w)) &&
+      // Колонка «В рассрочку» / «Рассрочка» / «Kreditke» — не наша цена
+      !h.includes("рассрочк") &&
+      !h.includes("kredit") &&
+      !h.includes("installment"),
+  );
+
+  if (nameIdx < 0 || priceIdx < 0) return null;
+  return { name: nameIdx, price: priceIdx };
+}
+
+function collectDataRows(table: Element): Element[] {
+  const tbody = table.querySelector("tbody");
+  if (tbody) {
+    return Array.from(tbody.children).filter((c) => c.tagName === "TR");
+  }
+  // Если tbody нет — берём все tr кроме первой (header).
+  const all = Array.from(table.querySelectorAll("tr"));
+  return all.slice(1);
+}
+
+function extractShopNameFromCell(cell: Element): string | null {
+  // Сначала пытаемся вытащить из <a> — Kaspi почти всегда обёртывает имя в ссылку.
+  const link = cell.querySelector("a");
+  const linkText = link?.textContent?.trim();
+  if (linkText) return linkText;
+
+  // Иначе берём текст до первого ★ или открывающей скобки с отзывами.
+  const raw = (cell.textContent ?? "").trim();
+  if (!raw) return null;
+  const cut = raw.split(/\s*(?:★|\(\s*\d+\s*(?:отзыв|пікір|review))/iu)[0]?.trim();
+  return cut || null;
 }
 
 function pickText(el: ParentNode, selectors: string[]): string | null {

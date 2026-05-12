@@ -113,12 +113,21 @@ export function Settings() {
       <div className="form-row">
         <label>Порог демпинга, %</label>
         <input
-          type="number"
+          type="text"
+          inputMode="decimal"
           value={s.dumpingThresholdPct}
-          onChange={(e) => update({ dumpingThresholdPct: Number(e.target.value) })}
+          onChange={(e) => {
+            // Поддерживаем русскую локаль: «−5,5» → −5.5. Number("-5,5") = NaN.
+            const normalized = e.target.value.replace(",", ".").trim();
+            const parsed = Number(normalized);
+            if (Number.isFinite(parsed)) {
+              update({ dumpingThresholdPct: parsed });
+            }
+          }}
         />
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-          Цена ≤ этого значения от моей считается демпингом. Default = −5%.
+          Конкурент с дельтой ≤ этого значения считается демпером. Default = −5
+          (на 5% ниже моей цены). Можно вводить через запятую: −5,5.
         </div>
       </div>
 

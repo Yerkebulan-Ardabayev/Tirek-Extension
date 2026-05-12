@@ -94,15 +94,42 @@ function injectStyles(shadow: ShadowRoot): void {
 }
 
 function renderBadge(badge: HTMLButtonElement, state: OverlayState): void {
+  // Очищаем модификаторы перед каждым ререндером
+  badge.classList.remove("is-clean", "is-warn", "is-info");
+
+  // A) Парсер не увидел ни одной строки продавцов на карточке
+  if (state.snapshot.competitors.length === 0) {
+    badge.classList.add("is-warn");
+    badge.innerHTML = `<span class="icon">⚠</span><span>Margli: не вижу таблицу продавцов</span>`;
+    return;
+  }
+
+  // B) Магазин не указан в настройках — не с чем сравнивать
+  if (!state.myShopName) {
+    badge.classList.add("is-info");
+    badge.innerHTML = `<span class="icon">ℹ</span><span>Margli: укажите ваш магазин в настройках</span>`;
+    return;
+  }
+
+  // C) Магазин указан, но его имя не нашлось среди продавцов на карточке
+  if (state.myPrice == null) {
+    badge.classList.add("is-warn");
+    badge.innerHTML = `<span class="icon">⚠</span><span>Margli: «${escapeHtml(state.myShopName)}» не найден среди продавцов</span>`;
+    return;
+  }
+
   const dumpers = computeDumpers(state);
+
+  // D) Демперов нет — настоящее «всё чисто»
   if (dumpers.length === 0) {
     badge.classList.add("is-clean");
     badge.innerHTML = `<span class="icon">✅</span><span>Margli: конкурентов ниже нет</span>`;
-  } else {
-    badge.classList.remove("is-clean");
-    const minDelta = Math.min(...dumpers.map((d) => deltaPct(d.price, state.myPrice ?? 0)));
-    badge.innerHTML = `<span class="icon">🛡</span><span>Margli: ${dumpers.length} ${plural(dumpers.length, "демпер", "демпера", "демперов")}, ${minDelta.toFixed(1)}%</span>`;
+    return;
   }
+
+  // E) Есть демперы — показываем сколько и максимальное отставание
+  const minDelta = Math.min(...dumpers.map((d) => deltaPct(d.price, state.myPrice as number)));
+  badge.innerHTML = `<span class="icon">🛡</span><span>Margli: ${dumpers.length} ${plural(dumpers.length, "демпер", "демпера", "демперов")}, ${minDelta.toFixed(1)}%</span>`;
 }
 
 function renderDrawer(
