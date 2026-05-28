@@ -331,6 +331,114 @@ describe("calculateMargin — льготная ставка НДС для апт
   });
 });
 
+describe("calculateMargin — реалистичные комбо-сценарии (alpha.8 verification)", () => {
+  it("Кейс 13: ТОО ОУР, всё включено — Kaspi Red + СПП + реклама + повыш. возвраты", () => {
+    // Реалистично для крупного селлера электроники на ОУР.
+    const r = calculateMargin({
+      price: 100000,
+      categoryId: "electronics", // 7%
+      cost: 60000,
+      taxRegime: "too-osnovnoy",
+      useKaspiRed: true,
+      hasSPP: true,
+      adsCost: 2000,
+      deliveryCost: 1500,
+      returnsRatePercent: 5,
+    });
+
+    // Комиссия 7% × 100 000 = 7 000
+    expect(r.kaspiCommission).toBe(7000);
+    // НДС 16% × 7 000 = 1 120
+    expect(r.kaspiVat).toBe(1120);
+    // Эквайринг 1% × 100 000 = 1 000
+    expect(r.kaspiPayFee).toBe(1000);
+    // Kaspi Red 4% × 100 000 = 4 000
+    expect(r.kaspiRedCost).toBe(4000);
+    // СПП 3% × 100 000 = 3 000
+    expect(r.sppCost).toBe(3000);
+    // Возвраты 5% × 60 000 = 3 000
+    expect(r.returnsCost).toBe(3000);
+
+    // Прибыль до налога:
+    //   100 000 − 7 000 − 1 120 − 1 000 − 4 000 − 3 000 − 1 500 − 2 000 − 3 000 − 60 000 = 17 380
+    expect(r.profitBeforeTax).toBe(17380);
+
+    // КПН 20% × 17 380 = 3 476 + НДС 16% × 100 000 = 16 000 → 19 476
+    expect(r.taxAmount).toBe(19476);
+
+    // Чистая прибыль: 17 380 − 19 476 = −2 096 (минус!)
+    // Это типичная боль ОУР-селлера: на бумаге прибыль есть, после налогов минус.
+    expect(r.netProfit).toBe(-2096);
+    expect(r.marginPercent).toBeLessThan(0);
+  });
+
+  it("Кейс 14: Pharmacy + ОУР + vatRefundable — льготный НДС 5% и зачёт", () => {
+    const r = calculateMargin({
+      price: 15000,
+      categoryId: "pharmacy", // 6.4%, vatRateOverride = 0.05
+      cost: 8000,
+      taxRegime: "too-osnovnoy",
+      vatRefundable: true,
+      returnsRatePercent: 1, // у аптек возвраты редкие
+    });
+
+    // Комиссия 6.4% × 15 000 = 960
+    expect(r.kaspiCommission).toBe(960);
+    // НДС зачитывается → 0 в расходе (при vatRefundable=true)
+    expect(r.kaspiVat).toBe(0);
+    // Эквайринг 1% × 15 000 = 150
+    expect(r.kaspiPayFee).toBe(150);
+    // Возвраты 1% × 8 000 = 80
+    expect(r.returnsCost).toBe(80);
+
+    // Прибыль до налога: 15 000 − 960 − 0 − 150 − 80 − 8 000 = 5 810
+    expect(r.profitBeforeTax).toBe(5810);
+
+    // КПН 20% × 5 810 = 1 162 + НДС 16% × 15 000 = 2 400 → 3 562
+    // Замечание: в текущей модели НДС с оборота не уменьшается на зачитываемый
+    // НДС с услуги Kaspi. Это упрощение, документировано в kz-taxes.ts:90 как
+    // «не годовой расчёт, оценка с операции». Для аптек на ОУР с реальным учётом
+    // НДС итоговая сумма налога будет чуть ниже. Закрывается отдельной задачей.
+    expect(r.taxAmount).toBe(3562);
+
+    // Чистая прибыль: 5 810 − 3 562 = 2 248
+    expect(r.netProfit).toBe(2248);
+
+    // В breakdown — лейбл НДС должен говорить «5%» и «зачитывается»
+    const vatLabel = r.breakdown.find((b) => b.label.includes("НДС на комиссию Kaspi"));
+    expect(vatLabel?.label).toContain("5");
+    expect(vatLabel?.label).toContain("зачитывается");
+  });
+
+  it("Кейс 15: маржа никогда не превышает 100% (sanity)", () => {
+    // На халявном товаре с cost=1₸ и price=10000₸ маржа в любом режиме < 100%
+    const r = calculateMargin({
+      price: 10000,
+      categoryId: "electronics",
+      cost: 1,
+      taxRegime: "ip-uproshenka",
+    });
+    expect(r.marginPercent).toBeLessThan(100);
+    expect(r.marginPercent).toBeGreaterThan(0);
+  });
+
+  it("Кейс 16: на грани нуля — копеечная прибыль, налог 4% оборота съедает её", () => {
+    // price=1000, cost=950 → грязная прибыль 50, но 4% от 1000 = 40 налог,
+    // плюс комиссия+НДС+эквайринг+возвраты съедают остаток. Должен быть минус.
+    const r = calculateMargin({
+      price: 1000,
+      categoryId: "electronics",
+      cost: 950,
+      taxRegime: "ip-uproshenka",
+    });
+    // Прибыль до налога точно отрицательна (комиссия+НДС+эквайринг+возвраты съели маржу)
+    expect(r.profitBeforeTax).toBeLessThan(0);
+    // На убытке упрощёнка ставит налог 0 (см. calculateTax)
+    expect(r.taxAmount).toBe(0);
+    expect(r.netProfit).toBeLessThan(0);
+  });
+});
+
 describe("formatters", () => {
   it("formatTenge", () => {
     expect(formatTenge(12500)).toBe("12 500 ₸");

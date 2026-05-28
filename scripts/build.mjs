@@ -6,11 +6,15 @@
  *   icon-16.png / icon-48.png / icon-128.png — генерируются если отсутствуют
  *   background/worker.js         — bundle service worker'а
  *   content/shop-page.js         — bundle content script для страницы товара
- *   content/mc-products.js       — bundle content script для кабинета
  *   content/overlay.css          — копия (web_accessible_resource)
  *   popup/index.html             — копия
  *   popup/popup.css              — копия
  *   popup/popup.js               — bundle React popup'а
+ *
+ * Примечание (с alpha.8): /mc/* парсер (`mc-products.ts`) НЕ собирается в
+ * dist/. Исходник остаётся как dead-code до получения тестового кабинета
+ * Kaspi-селлера. Web Store не должен видеть в zip скрипты, не подключённые
+ * через manifest.
  */
 
 import { build } from "esbuild";
@@ -241,15 +245,18 @@ async function main() {
     format: "iife",
     outfile: join(DIST, "content", "shop-page.js"),
   });
-  await build({
-    entryPoints: [join(SRC, "content", "mc-products.ts")],
-    bundle: true,
-    minify: false,
-    sourcemap: false,
-    target: "chrome116",
-    format: "iife",
-    outfile: join(DIST, "content", "mc-products.js"),
-  });
+  // /mc/* парсер не собираем в alpha.8: гипотетические селекторы, нет
+  // тестового кабинета, не подключён в manifest.json. Включим обратно когда
+  // появится возможность проверить на живом кабинете.
+  // await build({
+  //   entryPoints: [join(SRC, "content", "mc-products.ts")],
+  //   bundle: true,
+  //   minify: false,
+  //   sourcemap: false,
+  //   target: "chrome116",
+  //   format: "iife",
+  //   outfile: join(DIST, "content", "mc-products.js"),
+  // });
 
   console.log("[build] copy overlay.css");
   await copyFile(

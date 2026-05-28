@@ -35,6 +35,21 @@ const RECHECK_PERIOD_MIN = 30;
 const TELEMETRY_ALARM_NAME = "margli:telemetry-flush";
 const TELEMETRY_PERIOD_MIN = 24 * 60; // 1 раз в сутки
 
+/**
+ * Включён ли фоновый recheck демперов (раз в 30 минут).
+ *
+ * В alpha.8 — отключён по умолчанию: автор плагина не Kaspi-селлер,
+ * нет тестового кабинета, recheck через скрытое minimized-окно может
+ * мерцать в taskbar у тестеров. Включим обратно когда:
+ *   1. Сами проверим recheck на собственном Kaspi-кабинете (или партнёра).
+ *   2. Получим фидбек от первых 10+ тестеров о работе watchlist'а.
+ *
+ * Watchlist UI остаётся включённым (юзер может добавлять SKU), просто
+ * не будет периодической перепроверки. Передача `recheck:run` сообщением
+ * также игнорируется.
+ */
+const BACKGROUND_RECHECK_ENABLED = false;
+
 /** Сколько ждём snapshot от content script для одного URL. */
 const SNAPSHOT_TIMEOUT_MS = 25_000;
 
@@ -90,7 +105,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   // Миграция ПЕРЕД остальной инициализацией — иначе alarm может прочесть
   // устаревший lastSeen и снова уведомить о фейковых «демперах».
   await migrateStorageIfNeeded();
-  chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
+  if (BACKGROUND_RECHECK_ENABLED) {
+    chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
+  } else {
+    // На случай если плагин обновлён с alpha.7 (где recheck был включён) —
+    // снять существующий alarm, иначе он продолжит срабатывать со старого образа.
+    chrome.alarms.clear(ALARM_NAME);
+  }
   chrome.alarms.create(TELEMETRY_ALARM_NAME, { periodInMinutes: TELEMETRY_PERIOD_MIN });
   // Зарегистрировать install_id при первой установке
   await getOrCreateTelemetryMeta();
@@ -98,12 +119,20 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 chrome.runtime.onStartup.addListener(() => {
   console.log("[Margli/bg] onStartup");
-  chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
+  if (BACKGROUND_RECHECK_ENABLED) {
+    chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
+  }
   chrome.alarms.create(TELEMETRY_ALARM_NAME, { periodInMinutes: TELEMETRY_PERIOD_MIN });
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_NAME) {
+    if (!BACKGROUND_RECHECK_ENABLED) {
+      // На холодную защиту: alarm мог остаться с предыдущей версии до того
+      // как onInstalled его снял. Просто игнорируем.
+      console.log("[Margli/bg] recheck alarm fired but BACKGROUND_RECHECK_ENABLED=false, skipping");
+      return;
+    }
     console.log("[Margli/bg] alarm fired");
     await runRecheck();
   } else if (alarm.name === TELEMETRY_ALARM_NAME) {
@@ -225,6 +254,10 @@ async function handleSnapshot(snap: ShopPageSnapshot): Promise<void> {
  * закрывает окно. Всё остальное — в handleSnapshot.
  */
 async function runRecheck(): Promise<void> {
+  if (!BACKGROUND_RECHECK_ENABLED) {
+    console.log("[Margli/bg] BACKGROUND_RECHECK_ENABLED=false, skip");
+    return;
+  }
   const settings = await getSettings();
   if (!settings.alertsEnabled) {
     console.log("[Margli/bg] alerts disabled, skip recheck");
