@@ -179,3 +179,124 @@ describe("extractCompetitors via table-headers heuristic", () => {
     expect(snap.competitors).toEqual([]);
   });
 });
+
+describe("парсер: число отзывов не должно попадать в цену (regression от alpha.7 drawer-бага)", () => {
+  // Реальный кейс с QPick на Hoco UA18: число отзывов 11571 попадало в
+  // столбец цены при реальной цене 1998 ₸ (Math.max брал 11571).
+  // Это блокер для Web Store — селлеры видели бы фейковые «демперы» с
+  // несуществующими ценами.
+
+  it("число отзывов 11571 в ячейке имени НЕ попадает в цену", () => {
+    const doc = makeDoc(`
+      <table class="sellers-table__self">
+        <tbody>
+          <tr>
+            <td><a href="/shop/m/qpick">QPick</a> ★★★★★ (11571 отзыв)</td>
+            <td>Postomat, Чт, 14 мая</td>
+            <td>1 998 ₸</td>
+            <td>666 ₸</td>
+            <td><button>Выбрать</button></td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+    const snap = parseShopPage(doc, "https://kaspi.kz/shop/p/hoco-ua18-104906550/");
+    expect(snap.competitors).toHaveLength(1);
+    const qpick = snap.competitors[0];
+    expect(qpick?.price).toBe(1998);
+    expect(qpick?.reviewsCount).toBe(11571);
+    // Главная регрессия: 11571 НЕ должен попасть в price ни при каких обстоятельствах
+    expect(qpick?.price).not.toBe(11571);
+  });
+
+  it("очень большое «число отзывов» 9 999 999 НЕ попадает в цену", () => {
+    const doc = makeDoc(`
+      <table class="sellers-table__self">
+        <tbody>
+          <tr>
+            <td><a href="/shop/m/foo">Foo</a> ★★★★★ (9999999 отзывов)</td>
+            <td>2 500 ₸</td>
+            <td>835 ₸</td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+    const snap = parseShopPage(doc, "https://kaspi.kz/shop/p/foo-1/");
+    expect(snap.competitors).toHaveLength(1);
+    expect(snap.competitors[0]?.price).toBe(2500);
+  });
+
+  it("рейтинг 4.9 не попадает в цену", () => {
+    const doc = makeDoc(`
+      <table class="sellers-table__self">
+        <tbody>
+          <tr>
+            <td><a href="/shop/m/bar">Bar</a> 4.9 рейтинг</td>
+            <td>25 990 ₸</td>
+            <td>8 663 ₸</td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+    const snap = parseShopPage(doc, "https://kaspi.kz/shop/p/bar-1/");
+    expect(snap.competitors).toHaveLength(1);
+    expect(snap.competitors[0]?.price).toBe(25990);
+  });
+
+  it("sanity-граница: число 99_999_999_999 (мусор) НЕ становится ценой", () => {
+    // 99 миллиардов ₸ — явный мусор (например ID товара или ошибка JSON).
+    const doc = makeDoc(`
+      <table class="sellers-table__self">
+        <tbody>
+          <tr>
+            <td><a href="/shop/m/baz">Baz</a></td>
+            <td>99999999999</td>
+            <td>1 500 ₸</td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+    const snap = parseShopPage(doc, "https://kaspi.kz/shop/p/baz-1/");
+    expect(snap.competitors).toHaveLength(1);
+    expect(snap.competitors[0]?.price).toBe(1500);
+  });
+
+  it("приоритет ячейке с валютой над без-валютной (защита от ID/SKU как цены)", () => {
+    // Сценарий: первая td — это product-id 123456789, потом цена с ₸.
+    // Без приоритета валюты max() взял бы 123456789.
+    const doc = makeDoc(`
+      <table class="sellers-table__self">
+        <tbody>
+          <tr>
+            <td><a href="/shop/m/qux">Qux</a></td>
+            <td>123456789</td>
+            <td>3 500 ₸</td>
+            <td>1 167 ₸</td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+    const snap = parseShopPage(doc, "https://kaspi.kz/shop/p/qux-1/");
+    expect(snap.competitors).toHaveLength(1);
+    expect(snap.competitors[0]?.price).toBe(3500);
+  });
+
+  it("fallback: если в строке вообще нет ₸-маркера, max из чисел (≥50)", () => {
+    // Гипотетический сценарий: Kaspi убрал inline-₸, добавил его через CSS.
+    // Парсер не должен сломаться — fallback на max() из чисел в sanity-границах.
+    const doc = makeDoc(`
+      <table class="sellers-table__self">
+        <tbody>
+          <tr>
+            <td><a href="/shop/m/quux">Quux</a></td>
+            <td>5000</td>
+            <td>1667</td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+    const snap = parseShopPage(doc, "https://kaspi.kz/shop/p/quux-1/");
+    expect(snap.competitors).toHaveLength(1);
+    expect(snap.competitors[0]?.price).toBe(5000);
+  });
+});

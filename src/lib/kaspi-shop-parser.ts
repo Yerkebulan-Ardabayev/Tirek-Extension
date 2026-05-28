@@ -346,20 +346,55 @@ function parseSellerRow(tr: Element, idx: number): Competitor | null {
   }
   if (!shopName) shopName = `Магазин ${idx + 1}`;
 
-  // Цена — максимум среди всех ₸-чисел в строке. Это автоматически
-  // отбрасывает колонку «В рассрочку» (666 ₸ vs реальная 1998 ₸).
-  const allNumbers: number[] = [];
-  tr.querySelectorAll("td, [class*='price']").forEach((cell) => {
-    const n = parsePriceText(cell.textContent);
-    if (n != null && n > 0) allNumbers.push(n);
-  });
-  if (allNumbers.length === 0) return null;
+  // Цена. Эвристика «макс из всех чисел в строке» ловила баг: число
+  // отзывов (например 11571) попадало в столбец цены при реальной цене
+  // 1998 ₸. Решение трёхступенчатое:
+  //   1. Skip ячейки с индикаторами отзывов/рейтинга («отзыв/пікір/
+  //      review/рейтинг/★»), КРОМЕ случая когда в ячейке также есть
+  //      символ валюты (тогда это цена с подписью, оставляем).
+  //   2. Sanity-границы: 50 ≤ цена ≤ 50 000 000 ₸. Никакой Kaspi-товар
+  //      не дороже 50 млн ₸.
+  //   3. Приоритет ячейкам с явным маркером валюты (₸/тг/тенге/KZT).
+  //      В Kaspi цена всегда подписана ₸, рассрочка — тоже ₸ (но всегда
+  //      меньше реальной цены, поэтому max() из priority-набора отбрасывает
+  //      рассрочку автоматически). Fallback на ячейки без валюты — если
+  //      Kaspi когда-нибудь перестанет рендерить ₸ inline.
+  const PRICE_MIN = 50;
+  const PRICE_MAX = 50_000_000;
+  const REVIEW_INDICATOR = /(?:отзыв|пікір|review|рейтинг|★)/iu;
+  const CURRENCY_MARKER = /(?:₸|тг|тенге|KZT|kzt)/iu;
 
-  // Sanity: минимально валидная цена > 50 ₸ — отсекаем странные числа
-  // типа "(1) review" если случайно попадутся.
-  const validNumbers = allNumbers.filter((n) => n >= 50);
-  if (validNumbers.length === 0) return null;
-  const price = Math.max(...validNumbers);
+  const priorityPrices: number[] = [];
+  const fallbackPrices: number[] = [];
+
+  tr.querySelectorAll("td, [class*='price']").forEach((cell) => {
+    const text = cell.textContent ?? "";
+    const hasCurrency = CURRENCY_MARKER.test(text);
+    const hasReviewIndicator = REVIEW_INDICATOR.test(text);
+
+    // Ячейка имени магазина с «★ (N отзывов)» и без ₸ — выбрасываем.
+    // Ячейка с ₸ И отзывами одновременно — оставляем (это редкий случай
+    // «1998 ₸ (123 отзыва)», валюта явно говорит что цена).
+    if (hasReviewIndicator && !hasCurrency) return;
+
+    const n = parsePriceText(text);
+    if (n == null || n < PRICE_MIN || n > PRICE_MAX) return;
+
+    if (hasCurrency) {
+      priorityPrices.push(n);
+    } else {
+      fallbackPrices.push(n);
+    }
+  });
+
+  let price: number;
+  if (priorityPrices.length > 0) {
+    price = Math.max(...priorityPrices);
+  } else if (fallbackPrices.length > 0) {
+    price = Math.max(...fallbackPrices);
+  } else {
+    return null;
+  }
 
   const shopId = inferShopId(shopName, shopUrl);
 
