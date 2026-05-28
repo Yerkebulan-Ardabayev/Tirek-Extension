@@ -281,6 +281,35 @@ describe("парсер: число отзывов не должно попада
     expect(snap.competitors[0]?.price).toBe(3500);
   });
 
+  it("реальный Kaspi QPick: ячейка доставки «за 3 часа... 995 ₸» НЕ склеивается в 3995", () => {
+    // Реальный DOM из Hoco UA18 на kaspi.kz 2026-05-28 (через Claude in Chrome MCP).
+    // В одной ячейке: «Postomat, завтра / Доставка, завтра / Express, за 3 часа или ко
+    // времени, 995 ₸». parsePriceText на ВСЁМ тексте сцеплял «3 часа» + «995 ₸» в число 3995.
+    // Фикс: extractPricesWithCurrency извлекает каждое «<число> ₸/тенге/тг/KZT» по отдельности.
+    const doc = makeDoc(`
+      <table class="sellers-table__self">
+        <tbody>
+          <tr>
+            <td><a href="/shop/m/qpick">QPick</a> ★★★★★ (11571 отзыв)</td>
+            <td></td>
+            <td>Postomat, завтра Доставка, завтра Express, за 3 часа или ко времени, 995 ₸</td>
+            <td>1 995 ₸</td>
+            <td>665 ₸</td>
+            <td></td>
+            <td>Выбрать</td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+    const snap = parseShopPage(doc, "https://kaspi.kz/shop/p/hoco-ua18-104906550/");
+    expect(snap.competitors).toHaveLength(1);
+    const qpick = snap.competitors[0];
+    expect(qpick?.price).toBe(1995);
+    // Главная регрессия: 3995 НИКОГДА (склейка «3 часа» + «995 ₸» через parsePriceText на всей ячейке)
+    expect(qpick?.price).not.toBe(3995);
+    expect(qpick?.reviewsCount).toBe(11571);
+  });
+
   it("fallback: если в строке вообще нет ₸-маркера, max из чисел (≥50)", () => {
     // Гипотетический сценарий: Kaspi убрал inline-₸, добавил его через CSS.
     // Парсер не должен сломаться — fallback на max() из чисел в sanity-границах.

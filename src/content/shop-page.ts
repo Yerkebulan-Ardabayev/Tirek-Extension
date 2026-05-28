@@ -212,24 +212,107 @@ async function addToWatchlistFromSnapshot(
   return true;
 }
 
+// Состояние last-run для решения о повторных запусках. Kaspi рендерит блок
+// продавцов лениво: на свежей странице таблицы нет, она появляется только
+// после клика юзера на таб «Продавцы» (или после полного скролла, в части
+// категорий). MutationObserver ниже ловит этот момент и перезапускает парсер.
+let lastSnapshotEmpty = false;
+let lazyRetries = 0;
+const LAZY_RETRY_MAX = 5;
+let lazyRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function runAndRecord(): Promise<void> {
+  await run();
+  // Считываем состояние сразу из бейджа — он отражает что увидел парсер
+  // (см. renderBadge в overlay.ts). Это проще чем экспортировать state.
+  const host = document.getElementById("margli-overlay-host");
+  const badge = host?.shadowRoot?.querySelector(".margli-badge");
+  lastSnapshotEmpty = !!badge?.classList.contains("is-warn") &&
+    /не вижу таблицу/i.test(badge?.textContent ?? "");
+}
+
 // Запуск (после document_idle уже точно загружено базовое DOM-дерево)
-run().catch((err) => {
+runAndRecord().catch((err) => {
   console.error("[Margli] shop-page run() failed", err);
   mountErrorBadge(String(err?.message ?? err));
 });
 
-// Re-run если URL поменялся внутри SPA (Kaspi использует pjax-подобную навигацию
-// между товарами одной категории).
+// Polling fallback для lazy-tab случая (когда Kaspi скрывает таблицу через
+// display:none и переключает CSS при клике на таб «Продавцы» — MutationObserver
+// на childList такие изменения не ловит). Каждые 2 сек проверяем есть ли
+// sellers-таблица + был ли первый run пустым. Стопаемся после 30 секунд
+// или после LAZY_RETRY_MAX повторов.
+const LAZY_POLL_INTERVAL_MS = 2000;
+const LAZY_POLL_MAX_MS = 30_000;
+const lazyPollStart = Date.now();
+const lazyPollTimer = setInterval(() => {
+  if (
+    lazyRetries >= LAZY_RETRY_MAX ||
+    !lastSnapshotEmpty ||
+    Date.now() - lazyPollStart > LAZY_POLL_MAX_MS
+  ) {
+    clearInterval(lazyPollTimer);
+    return;
+  }
+  const hasSellers =
+    document.querySelectorAll('table[class*="sellers"] tbody tr').length > 0 ||
+    document.querySelectorAll('a[href*="/shop/m/"]').length >= 2;
+  if (hasSellers) {
+    clearInterval(lazyPollTimer);
+    lazyRetries += 1;
+    console.log(
+      `[Margli] lazy poll detected sellers-table, re-running (try ${lazyRetries}/${LAZY_RETRY_MAX})`,
+    );
+    runAndRecord().catch((err) => {
+      console.error("[Margli] lazy poll re-run failed", err);
+    });
+  }
+}, LAZY_POLL_INTERVAL_MS);
+
+// MutationObserver ловит 2 кейса:
+//   1. Смена URL внутри SPA (Kaspi pjax-подобная навигация между товарами
+//      одной категории) — re-run всегда.
+//   2. Появление sellers-таблицы / shop/m/ ссылок ПОСЛЕ первого пустого
+//      парсинга. Это случай lazy-tab: Kaspi рендерит таблицу только после
+//      клика юзера на таб «Продавцы», парсер уже отработал свои 15 сек
+//      MutationObserver и сдался. Дополнительный observer ловит появление
+//      нужных селекторов и заставляет парсер прогнаться повторно.
+//      Лимит LAZY_RETRY_MAX защищает от infinite-loop если страница
+//      постоянно меняется.
 let lastUrl = location.href;
 new MutationObserver(() => {
+  // 1. Сменился URL → перезапуск с нуля
   if (location.href !== lastUrl) {
     lastUrl = location.href;
     if (/\/shop\/p\//.test(location.pathname)) {
       console.log("[Margli] URL changed, re-running");
-      run().catch((err) => {
+      lazyRetries = 0;
+      lastSnapshotEmpty = false;
+      runAndRecord().catch((err) => {
         console.error("[Margli] re-run failed", err);
         mountErrorBadge(String(err?.message ?? err));
       });
+    }
+    return;
+  }
+
+  // 2. Появилась sellers-таблица после пустого первого run
+  if (lastSnapshotEmpty && lazyRetries < LAZY_RETRY_MAX) {
+    const hasSellers =
+      !!document.querySelector('table[class*="sellers"]') ||
+      !!document.querySelector('a[href*="/shop/m/"]');
+    if (hasSellers) {
+      // Debounce: ждём 500мс пока Kaspi дорисует все строки таблицы.
+      // Без debounce можем поймать момент когда есть 1-2 строки из 5.
+      if (lazyRetryTimer) clearTimeout(lazyRetryTimer);
+      lazyRetryTimer = setTimeout(() => {
+        lazyRetryTimer = null;
+        lazyRetries += 1;
+        console.log(`[Margli] lazy sellers-table detected, re-running (try ${lazyRetries}/${LAZY_RETRY_MAX})`);
+        runAndRecord().catch((err) => {
+          console.error("[Margli] lazy re-run failed", err);
+        });
+      }, 500);
     }
   }
 }).observe(document.body, { childList: true, subtree: true });

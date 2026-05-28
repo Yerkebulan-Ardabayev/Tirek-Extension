@@ -367,6 +367,27 @@ function parseSellerRow(tr: Element, idx: number): Competitor | null {
   const priorityPrices: number[] = [];
   const fallbackPrices: number[] = [];
 
+  // Извлекает все числа-перед-валютой из текста ячейки. Это безопаснее чем
+  // `parsePriceText(text)` на всём содержимом: если в одной ячейке есть и
+  // мусорные цифры («за 3 часа»), и реальная цена с ₸ («995 ₸»), общий
+  // парсер склеивал их в «3995». Regex ловит только «<число> ₸/тенге/тг/KZT».
+  function extractPricesWithCurrency(text: string): number[] {
+    const out: number[] = [];
+    // Цифры (могут содержать пробелы как разделители тысяч) + опционально
+    // десятичный разделитель + валюта. Сопоставляем NBSP и тонкие пробелы.
+    const re = /(\d[\d\s   ]*(?:[.,]\d{1,2})?)\s*(?:₸|тенге|тг|KZT|kzt)/giu;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      const raw = match[1];
+      if (!raw) continue;
+      const n = parsePriceText(raw + " ₸");
+      if (n != null && n >= PRICE_MIN && n <= PRICE_MAX) {
+        out.push(n);
+      }
+    }
+    return out;
+  }
+
   tr.querySelectorAll("td, [class*='price']").forEach((cell) => {
     const text = cell.textContent ?? "";
     const hasCurrency = CURRENCY_MARKER.test(text);
@@ -377,13 +398,20 @@ function parseSellerRow(tr: Element, idx: number): Competitor | null {
     // «1998 ₸ (123 отзыва)», валюта явно говорит что цена).
     if (hasReviewIndicator && !hasCurrency) return;
 
-    const n = parsePriceText(text);
-    if (n == null || n < PRICE_MIN || n > PRICE_MAX) return;
-
     if (hasCurrency) {
-      priorityPrices.push(n);
+      // Извлекаем КАЖДОЕ число-с-валютой по отдельности — защита от
+      // случая когда в одной ячейке несколько цифр без валюты + одна с ₸
+      // («за 3 часа... 995 ₸» давал склейку 3995).
+      const found = extractPricesWithCurrency(text);
+      for (const n of found) priorityPrices.push(n);
     } else {
-      fallbackPrices.push(n);
+      // Без валюты — fallback. Парсим весь текст ячейки (если там одно
+      // число, парсер вернёт его). Это путь для гипотетического Kaspi
+      // без inline-₸; в реальности почти не срабатывает.
+      const n = parsePriceText(text);
+      if (n != null && n >= PRICE_MIN && n <= PRICE_MAX) {
+        fallbackPrices.push(n);
+      }
     }
   });
 
