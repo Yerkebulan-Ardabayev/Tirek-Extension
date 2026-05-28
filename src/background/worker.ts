@@ -41,10 +41,55 @@ const SNAPSHOT_TIMEOUT_MS = 25_000;
 /** Пауза между URL'ами при последовательном рече кe — даёт Chrome'у выгрузить страницу. */
 const PAUSE_BETWEEN_URLS_MS = 2_000;
 
+/**
+ * Версия схемы chrome.storage.local.
+ *
+ * Бампать при изменении формата сохраняемых данных или когда нужно
+ * стереть исторический мусор у тестеров (например, парсер раньше
+ * ошибочно сохранял число отзывов как цену — это сидит в lastSeen).
+ *
+ * v1 (изначально): без миграций.
+ * v2 (2026-05-28): wipe `margli:lastSeen` — у альфа-тестеров и автора там
+ * исторические цены вида 3030/11571₸ от старого бага парсера, который брал
+ * максимум числа из строки tr и захватывал число отзывов. Теперь парсер
+ * пофиксен (фильтр + sanity-граница), но кэш остался.
+ */
+const STORAGE_SCHEMA_VERSION = 2;
+const SCHEMA_KEY = "margli:schemaVersion";
+
+/**
+ * Миграция chrome.storage.local при обновлении/установке плагина.
+ *
+ * Settings и watchlist (только SKU + url) — оставляем, они не зависят от парсера.
+ * lastSeen — wipe-аем, там исторический мусор от старого парсера.
+ * costs — оставляем, это пользовательский ввод (закупка, реклама, возвраты).
+ *
+ * Идемпотентна: если уже на актуальной версии, ничего не делает.
+ */
+async function migrateStorageIfNeeded(): Promise<void> {
+  const stored = await chrome.storage.local.get(SCHEMA_KEY);
+  const currentVersion: number = Number(stored[SCHEMA_KEY] ?? 0);
+  if (currentVersion >= STORAGE_SCHEMA_VERSION) {
+    return;
+  }
+  console.log(
+    `[Margli/bg] migrating storage from v${currentVersion} to v${STORAGE_SCHEMA_VERSION}`,
+  );
+  // v0/v1 → v2: wipe lastSeen (исторический мусор от старого парсера)
+  if (currentVersion < 2) {
+    await chrome.storage.local.remove("margli:lastSeen");
+    console.log("[Margli/bg] wiped margli:lastSeen (historical parser bug cleanup)");
+  }
+  await chrome.storage.local.set({ [SCHEMA_KEY]: STORAGE_SCHEMA_VERSION });
+}
+
 // --- alarms -----------------------------------------------------------------
 
-chrome.runtime.onInstalled.addListener(async () => {
-  console.log("[Margli/bg] onInstalled");
+chrome.runtime.onInstalled.addListener(async (details) => {
+  console.log("[Margli/bg] onInstalled", { reason: details.reason, prev: details.previousVersion });
+  // Миграция ПЕРЕД остальной инициализацией — иначе alarm может прочесть
+  // устаревший lastSeen и снова уведомить о фейковых «демперах».
+  await migrateStorageIfNeeded();
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
   chrome.alarms.create(TELEMETRY_ALARM_NAME, { periodInMinutes: TELEMETRY_PERIOD_MIN });
   // Зарегистрировать install_id при первой установке

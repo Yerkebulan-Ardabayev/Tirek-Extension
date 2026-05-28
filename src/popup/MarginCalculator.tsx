@@ -49,23 +49,53 @@ export function MarginCalculator() {
   const update = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
+  /**
+   * Дисплейное значение для числового инпута.
+   * 0 → пустая строка (чтобы не висел ведущий «0»), остальное → число строкой.
+   * Это даёт UX: открыл поле, начал печатать «12», получил «12», а не «012».
+   */
+  const numToDisplay = (n: number): string => (n === 0 ? "" : String(n));
+
+  /**
+   * Парсинг ввода с нормализацией.
+   * Оставляем только цифры и опциональную точку, убираем ведущие нули,
+   * пустая строка → 0.
+   * Решает баг controlled-input в React: Number('012')===12, state не
+   * меняется, DOM остаётся '012'. Теперь хранится чистое число, а value
+   * формируется из state — leading zero физически невозможен.
+   */
+  const parseIntInput = (raw: string): number => {
+    const cleaned = raw.replace(/[^\d]/g, "");
+    if (cleaned === "") return 0;
+    return Number(cleaned);
+  };
+
+  const parseDecimalInput = (raw: string): number => {
+    const cleaned = raw.replace(/[^\d.,]/g, "").replace(",", ".");
+    if (cleaned === "" || cleaned === ".") return 0;
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   return (
     <>
       <div className="form-cols">
         <div className="form-row">
           <label>Цена продажи ₸</label>
           <input
-            type="number"
-            value={form.price}
-            onChange={(e) => update("price", Number(e.target.value))}
+            type="text"
+            inputMode="numeric"
+            value={numToDisplay(form.price)}
+            onChange={(e) => update("price", parseIntInput(e.target.value))}
           />
         </div>
         <div className="form-row">
           <label>Закупка ₸</label>
           <input
-            type="number"
-            value={form.cost}
-            onChange={(e) => update("cost", Number(e.target.value))}
+            type="text"
+            inputMode="numeric"
+            value={numToDisplay(form.cost)}
+            onChange={(e) => update("cost", parseIntInput(e.target.value))}
           />
         </div>
       </div>
@@ -88,17 +118,19 @@ export function MarginCalculator() {
         <div className="form-row">
           <label>Доставка ₸</label>
           <input
-            type="number"
-            value={form.deliveryCost}
-            onChange={(e) => update("deliveryCost", Number(e.target.value))}
+            type="text"
+            inputMode="numeric"
+            value={numToDisplay(form.deliveryCost)}
+            onChange={(e) => update("deliveryCost", parseIntInput(e.target.value))}
           />
         </div>
         <div className="form-row">
           <label>Реклама ₸/SKU</label>
           <input
-            type="number"
-            value={form.adsCost}
-            onChange={(e) => update("adsCost", Number(e.target.value))}
+            type="text"
+            inputMode="numeric"
+            value={numToDisplay(form.adsCost)}
+            onChange={(e) => update("adsCost", parseIntInput(e.target.value))}
           />
         </div>
       </div>
@@ -106,9 +138,10 @@ export function MarginCalculator() {
       <div className="form-row">
         <label>Возвраты %</label>
         <input
-          type="number"
-          value={form.returnsRatePercent}
-          onChange={(e) => update("returnsRatePercent", Number(e.target.value))}
+          type="text"
+          inputMode="decimal"
+          value={numToDisplay(form.returnsRatePercent)}
+          onChange={(e) => update("returnsRatePercent", parseDecimalInput(e.target.value))}
         />
       </div>
 
