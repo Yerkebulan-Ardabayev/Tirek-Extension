@@ -2,21 +2,20 @@
  * Background service worker (MV3).
  *
  * Задачи:
- *   1. chrome.alarms — каждые 30 минут перепроверять watchlist, открывая
- *      каждый URL в скрытом minimized-окне. Content script инжектится
- *      туда автоматом (см. manifest.json), парсит уже отрендеренный
- *      Kaspi'ом DOM (с реальными ценами!) и шлёт snapshot обратно.
- *   2. chrome.notifications — алертить о новых демперах.
- *   3. Принимать сообщения от content и popup (snapshot, recheck:run).
+ *   1. chrome.notifications — алертить о новых демперах.
+ *   2. Принимать snapshot от content script, когда селлер сам открыл
+ *      карточку /shop/p/* (пассивный путь), считать демперов и обновлять
+ *      watchlist. Никаких фоновых вкладок/окон плагин не открывает.
+ *   3. chrome.alarms — раз в сутки сбрасывать накопленную телеметрию.
  *
- * Почему скрытое окно вместо fetch:
- *   Kaspi.kz рендерит цены клиентским JS — в SSR-HTML стоит "price":"undefined",
+ * Цены берём только из DOM той вкладки, которую открыл сам пользователь:
+ *   Kaspi.kz рендерит цены клиентским JS, в SSR-HTML стоит "price":"undefined",
  *   список продавцов отсутствует. Поэтому fetch() из service worker не даёт
- *   данных. Реальный Chrome-контекст (даже minimized) выполняет JS Kaspi
- *   и DOM получает цены.
+ *   данных, а реальный Chrome-контекст уже выполнил JS Kaspi и DOM содержит
+ *   цены — их content script и присылает.
  *
  * Кросс-браузерная заметка: на MV3 service worker может быть «убит» Chrome'ом
- * между alarm-событиями. Всё состояние держим в chrome.storage.local.
+ * между событиями. Всё состояние держим в chrome.storage.local.
  */
 
 import {
@@ -27,34 +26,15 @@ import {
   setLastSeen,
   updateWatchlistItem,
 } from "../lib/storage";
-import { flushTelemetry, getOrCreateTelemetryMeta, trackError, trackEvent } from "../lib/telemetry";
+import { flushTelemetry, getOrCreateTelemetryMeta, trackEvent } from "../lib/telemetry";
 import type { Competitor, ExtensionMessage, ShopPageSnapshot, WatchlistItem } from "../lib/types";
 
+// Имя alarm'а старого фонового recheck (alpha.7). Сам recheck удалён,
+// но имя нужно для одноразовой очистки alarm'а у тех, кто обновляется
+// с alpha.7 (см. onInstalled).
 const ALARM_NAME = "margli:recheck";
-const RECHECK_PERIOD_MIN = 30;
 const TELEMETRY_ALARM_NAME = "margli:telemetry-flush";
 const TELEMETRY_PERIOD_MIN = 24 * 60; // 1 раз в сутки
-
-/**
- * Включён ли фоновый recheck демперов (раз в 30 минут).
- *
- * В alpha.8 — отключён по умолчанию: автор плагина не Kaspi-селлер,
- * нет тестового кабинета, recheck через скрытое minimized-окно может
- * мерцать в taskbar у тестеров. Включим обратно когда:
- *   1. Сами проверим recheck на собственном Kaspi-кабинете (или партнёра).
- *   2. Получим фидбек от первых 10+ тестеров о работе watchlist'а.
- *
- * Watchlist UI остаётся включённым (юзер может добавлять SKU), просто
- * не будет периодической перепроверки. Передача `recheck:run` сообщением
- * также игнорируется.
- */
-const BACKGROUND_RECHECK_ENABLED = false;
-
-/** Сколько ждём snapshot от content script для одного URL. */
-const SNAPSHOT_TIMEOUT_MS = 25_000;
-
-/** Пауза между URL'ами при последовательном рече кe — даёт Chrome'у выгрузить страницу. */
-const PAUSE_BETWEEN_URLS_MS = 2_000;
 
 /**
  * Версия схемы chrome.storage.local.
@@ -105,13 +85,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   // Миграция ПЕРЕД остальной инициализацией — иначе alarm может прочесть
   // устаревший lastSeen и снова уведомить о фейковых «демперах».
   await migrateStorageIfNeeded();
-  if (BACKGROUND_RECHECK_ENABLED) {
-    chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
-  } else {
-    // На случай если плагин обновлён с alpha.7 (где recheck был включён) —
-    // снять существующий alarm, иначе он продолжит срабатывать со старого образа.
-    chrome.alarms.clear(ALARM_NAME);
-  }
+  // Одноразовая очистка для тех, кто обновляется с alpha.7 (где был фоновый
+  // recheck через скрытое окно): снять оставшийся alarm, иначе он продолжит
+  // срабатывать со старого образа. У свежих установок alarm'а нет — no-op.
+  chrome.alarms.clear(ALARM_NAME);
   chrome.alarms.create(TELEMETRY_ALARM_NAME, { periodInMinutes: TELEMETRY_PERIOD_MIN });
   // Зарегистрировать install_id при первой установке
   await getOrCreateTelemetryMeta();
@@ -119,23 +96,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 chrome.runtime.onStartup.addListener(() => {
   console.log("[Margli/bg] onStartup");
-  if (BACKGROUND_RECHECK_ENABLED) {
-    chrome.alarms.create(ALARM_NAME, { periodInMinutes: RECHECK_PERIOD_MIN });
-  }
   chrome.alarms.create(TELEMETRY_ALARM_NAME, { periodInMinutes: TELEMETRY_PERIOD_MIN });
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === ALARM_NAME) {
-    if (!BACKGROUND_RECHECK_ENABLED) {
-      // На холодную защиту: alarm мог остаться с предыдущей версии до того
-      // как onInstalled его снял. Просто игнорируем.
-      console.log("[Margli/bg] recheck alarm fired but BACKGROUND_RECHECK_ENABLED=false, skipping");
-      return;
-    }
-    console.log("[Margli/bg] alarm fired");
-    await runRecheck();
-  } else if (alarm.name === TELEMETRY_ALARM_NAME) {
+  if (alarm.name === TELEMETRY_ALARM_NAME) {
     const result = await flushTelemetry();
     console.log("[Margli/bg] telemetry flush", result);
   }
@@ -175,11 +140,8 @@ chrome.runtime.onMessage.addListener((rawMsg: unknown, _sender, sendResponse) =>
         sendResponse({ type: "ack", payload: { ok: true } });
         return;
       }
-      if (msg.type === "recheck:run") {
-        await runRecheck();
-        sendResponse({ type: "ack", payload: { ok: true } });
-        return;
-      }
+      // `recheck:run` больше не обрабатывается (фоновый recheck удалён) —
+      // молча подтверждаем через общий ack ниже, чтобы старый popup не падал.
       sendResponse({ type: "ack", payload: { ok: true } });
     } catch (err) {
       sendResponse({
@@ -192,12 +154,10 @@ chrome.runtime.onMessage.addListener((rawMsg: unknown, _sender, sendResponse) =>
 });
 
 /**
- * Обрабатывает snapshot карточки независимо от источника:
- *   - passive: селлер сам открыл /shop/p/* — content script отправил
- *   - recheck: background открыл скрытое окно с тем же URL — content script
- *     отправил из этой невидимой вкладки
+ * Обрабатывает snapshot карточки, который content script присылает, когда
+ * селлер сам открыл /shop/p/* (пассивный путь, единственный источник).
  *
- * Логика одна: diff с lastSeen → новые демперы → notifications + обновление
+ * Логика: diff с lastSeen → новые демперы → notifications + обновление
  * watchlist + сохранение нового lastSeen.
  */
 async function handleSnapshot(snap: ShopPageSnapshot): Promise<void> {
@@ -244,95 +204,6 @@ async function handleSnapshot(snap: ShopPageSnapshot): Promise<void> {
     await sendDumpNotification(watched, d);
     void trackEvent("dumper_alert_sent");
   }
-}
-
-// --- recheck loop -----------------------------------------------------------
-
-/**
- * Периодический recheck. Открывает каждый URL из watchlist в одном скрытом
- * minimized-окне последовательно, ждёт snapshot от content script, потом
- * закрывает окно. Всё остальное — в handleSnapshot.
- */
-async function runRecheck(): Promise<void> {
-  if (!BACKGROUND_RECHECK_ENABLED) {
-    console.log("[Margli/bg] BACKGROUND_RECHECK_ENABLED=false, skip");
-    return;
-  }
-  const settings = await getSettings();
-  if (!settings.alertsEnabled) {
-    console.log("[Margli/bg] alerts disabled, skip recheck");
-    return;
-  }
-  const watchlist = await getWatchlist();
-  if (watchlist.length === 0) {
-    console.log("[Margli/bg] watchlist empty, skip recheck");
-    return;
-  }
-  console.log("[Margli/bg] recheck start, items:", watchlist.length);
-
-  const win = await chrome.windows.create({
-    url: "about:blank",
-    focused: false,
-    state: "minimized",
-    type: "popup",
-    width: 600,
-    height: 400,
-  });
-  const tabId = win.tabs?.[0]?.id;
-  if (tabId == null || win.id == null) {
-    console.warn("[Margli/bg] failed to create hidden window");
-    return;
-  }
-
-  try {
-    for (const item of watchlist) {
-      try {
-        await chrome.tabs.update(tabId, { url: item.url });
-        // Ждём snapshot конкретно по этому SKU. Если не пришёл за timeout —
-        // двигаемся дальше, не блокируем весь цикл.
-        const ok = await waitForSnapshot(item.sku, SNAPSHOT_TIMEOUT_MS);
-        console.log("[Margli/bg] recheck", item.sku, ok ? "ok" : "timeout");
-        if (!ok) void trackError("recheck_snapshot_timeout");
-      } catch (err) {
-        console.warn("[Margli/bg] recheck item failed", item.sku, err);
-        void trackError("recheck_item_failed");
-      }
-      await sleep(PAUSE_BETWEEN_URLS_MS);
-    }
-    void trackEvent("recheck_completed");
-  } finally {
-    try {
-      await chrome.windows.remove(win.id);
-    } catch (err) {
-      console.warn("[Margli/bg] hidden window close failed", err);
-    }
-  }
-}
-
-/**
- * Ждёт shop:snapshot с конкретным sku или таймаут.
- * Резолвится `true` если snapshot пришёл, `false` если timeout.
- */
-function waitForSnapshot(sku: string, timeoutMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      chrome.runtime.onMessage.removeListener(handler);
-      resolve(false);
-    }, timeoutMs);
-    function handler(rawMsg: unknown): void {
-      const m = rawMsg as ExtensionMessage;
-      if (m?.type === "shop:snapshot" && m.payload?.sku === sku) {
-        clearTimeout(timer);
-        chrome.runtime.onMessage.removeListener(handler);
-        resolve(true);
-      }
-    }
-    chrome.runtime.onMessage.addListener(handler);
-  });
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 // --- helpers: dumper detection ---------------------------------------------

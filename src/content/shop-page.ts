@@ -7,7 +7,9 @@
  */
 
 import { parseShopPage } from "../lib/kaspi-shop-parser";
+import { fetchAllOffers, extractMasterId, getKaspiCityId } from "../lib/kaspi-offers-api";
 import { generateDossierPdf, downloadBlob } from "../lib/pdf-dossier";
+import { findMyShop, normalizeForMatch } from "../lib/shop-match";
 import {
   addToWatchlist,
   getSettings,
@@ -70,12 +72,37 @@ function waitForReady(): Promise<boolean> {
 
 async function run(): Promise<void> {
   console.log("[Margli] run() start", location.href);
+
+  // Bug 2 fix: тянем ВСЕХ продавцов через offer-view API параллельно с
+  // ожиданием DOM. API отдаёт продавцов со ВСЕХ страниц пагинации Kaspi с
+  // чистой числовой ценой и не зависит от lazy-tab рендера таблицы. Если
+  // API недоступен, откатываемся на DOM-парсер.
+  const masterId = extractMasterId();
+  const offersPromise = masterId
+    ? fetchAllOffers(masterId, getKaspiCityId()).catch((err) => {
+        console.warn("[Margli] offer-view API failed, fallback to DOM parse", err);
+        return null;
+      })
+    : Promise.resolve(null);
+
   const ready = await waitForReady();
   console.log("[Margli] DOM ready?", ready);
 
-  // Парсим то, что есть. Даже если получится пусто — overlay покажет
-  // жёлтый бейдж «не вижу таблицу», а не умрёт молча.
+  // DOM-парс: имя товара, sku, базовая цена + продавцы как fallback. Даже
+  // если пусто, overlay покажет жёлтый бейдж, а не умрёт молча.
   const snapshot = parseShopPage();
+
+  // API полнее и точнее DOM (все страницы пагинации, чистая числовая цена,
+  // без склейки текста доставки и числа отзывов). Если он отдал продавцов,
+  // заменяем ими список из DOM.
+  const apiOffers = await offersPromise;
+  if (apiOffers && apiOffers.length > 0) {
+    snapshot.competitors = apiOffers;
+    console.log("[Margli] competitors from offer-view API:", apiOffers.length);
+  } else {
+    console.log("[Margli] competitors from DOM parse:", snapshot.competitors.length);
+  }
+
   console.log("[Margli] parsed snapshot", {
     productName: snapshot.productName,
     sku: snapshot.sku,
@@ -93,18 +120,15 @@ async function run(): Promise<void> {
   const myShopName = settings.myShopId;
 
   // Сопоставляем «моего» продавца на карточке.
-  // Имена нормализуем: trim + lowercase, чтобы «Mobilka-kz» совпадал с «mobilka-kz ».
+  // Имена нормализуем эластично (убираем дефисы, пробелы, точки, регистр),
+  // чтобы «LEADER KZ» совпадал с «Leader-kz», а «Astana case» с «Astana-case».
   let myPrice: number | null = null;
-  if (myShopName && snapshot.competitors.length > 0) {
-    const needle = myShopName.trim().toLowerCase();
-    const mine = snapshot.competitors.find((c) => {
-      const name = c.shopName.trim().toLowerCase();
-      const id = c.shopId.trim().toLowerCase();
-      return name === needle || id === needle;
-    });
-    if (mine) myPrice = mine.price;
-    console.log("[Margli] myShopName lookup", { needle, found: mine ?? null });
-  }
+  const mine = findMyShop(snapshot.competitors, myShopName);
+  if (mine) myPrice = mine.price;
+  console.log("[Margli] myShopName lookup", {
+    needle: myShopName ? normalizeForMatch(myShopName) : null,
+    found: mine ?? null,
+  });
 
   const watchlist = await getWatchlist();
   const isWatched = !!snapshot.sku && watchlist.some((w) => w.sku === snapshot.sku);

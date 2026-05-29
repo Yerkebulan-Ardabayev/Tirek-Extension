@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "version_name": "0.1.0-alpha.8",
   "description": "Реальная маржа и анти-демпинг для селлеров Kaspi.kz. Альфа-версия для закрытого теста.",
-  "permissions": ["storage", "alarms", "notifications", "activeTab"],
-  "host_permissions": ["https://kaspi.kz/*", "https://*.kaspi.kz/*"],
+  "permissions": ["storage", "alarms", "notifications"],
+  "host_permissions": ["https://kaspi.kz/shop/p/*"],
   "background": {
     "service_worker": "background/worker.js",
     "type": "module"
@@ -35,7 +35,7 @@
   "web_accessible_resources": [
     {
       "resources": ["content/overlay.css", "fonts/PTSans-Regular.ttf"],
-      "matches": ["https://kaspi.kz/*", "https://*.kaspi.kz/*"]
+      "matches": ["https://kaspi.kz/shop/p/*"]
     }
   ]
 }

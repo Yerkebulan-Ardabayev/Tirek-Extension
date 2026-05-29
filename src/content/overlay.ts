@@ -93,43 +93,100 @@ function injectStyles(shadow: ShadowRoot): void {
   shadow.appendChild(link);
 }
 
-function renderBadge(badge: HTMLButtonElement, state: OverlayState): void {
-  // Очищаем модификаторы перед каждым ререндером
-  badge.classList.remove("is-clean", "is-warn", "is-info");
+/** Визуальный вид бейджа. `danger` = состояние E (демперы), без CSS-модификатора. */
+export type BadgeKind = "warn" | "info" | "clean" | "danger";
 
-  // A) Парсер не увидел ни одной строки продавцов на карточке
+export type BadgeResult = {
+  kind: BadgeKind;
+  /** Иконка (эмодзи) в `<span class="icon">` */
+  icon: string;
+  /** Уже экранированный HTML-текст для второго `<span>` */
+  text: string;
+};
+
+/**
+ * Чистая функция: по состоянию overlay вычисляет вид бейджа (A–E).
+ * Никаких chrome.* и DOM — только escapeHtml / plural / deltaPct / computeDumpers,
+ * чтобы логику можно было покрыть юнит-тестами без рендера.
+ *
+ * `text` уже прогнан через escapeHtml там, где подставляется имя магазина.
+ */
+export function computeBadge(state: OverlayState): BadgeResult {
+  // A) Парсер не увидел ни одной строки продавцов на карточке.
+  //    ВАЖНО: фраза «не вижу таблицу» + kind=warn (→ class is-warn) — это
+  //    контракт с content/shop-page.ts, который детектит пустое состояние
+  //    по is-warn + regex /не вижу таблицу/i. Не менять.
   if (state.snapshot.competitors.length === 0) {
-    badge.classList.add("is-warn");
-    badge.innerHTML = `<span class="icon">⚠</span><span>Margli: не вижу таблицу продавцов</span>`;
-    return;
+    return { kind: "warn", icon: "⚠", text: "Margli: не вижу таблицу продавцов" };
   }
 
   // B) Магазин не указан в настройках — не с чем сравнивать
   if (!state.myShopName) {
-    badge.classList.add("is-info");
-    badge.innerHTML = `<span class="icon">ℹ</span><span>Margli: укажите ваш магазин в настройках</span>`;
-    return;
+    return { kind: "info", icon: "ℹ", text: "Margli: укажите ваш магазин в настройках" };
   }
 
-  // C) Магазин указан, но его имя не нашлось среди продавцов на карточке
+  // C) Магазин указан, но его имя не нашлось среди продавцов на карточке.
+  //    Открыть товар, который ты не продаёшь — нормальная ситуация, не warn.
   if (state.myPrice == null) {
-    badge.classList.add("is-warn");
-    badge.innerHTML = `<span class="icon">⚠</span><span>Margli: «${escapeHtml(state.myShopName)}» не найден среди продавцов</span>`;
-    return;
+    return {
+      kind: "info",
+      icon: "ℹ",
+      text: `Margli: «${escapeHtml(state.myShopName)}» не найден среди продавцов`,
+    };
   }
 
   const dumpers = computeDumpers(state);
 
-  // D) Демперов нет — настоящее «всё чисто»
   if (dumpers.length === 0) {
-    badge.classList.add("is-clean");
-    badge.innerHTML = `<span class="icon">✅</span><span>Margli: конкурентов ниже нет</span>`;
-    return;
+    // Сколько конкурентов (исключая мой магазин) дешевле меня, но НЕ дотянули
+    // до порога демпинга. Демпер ≠ «любой кто дешевле»: -0.1% это не демпер,
+    // но бейдж «конкурентов ниже нет» в таком случае врал бы.
+    const cheaperCount = countCheaperCompetitors(state);
+
+    // D) Демперов нет и никто не дешевле — настоящее «всё чисто»
+    if (cheaperCount === 0) {
+      return { kind: "clean", icon: "✅", text: "Margli: вы дешевле всех" };
+    }
+
+    // D2) Демперов нет, но кто-то дешевле — честно, без зелёного «всё чисто»
+    return {
+      kind: "info",
+      icon: "ℹ",
+      text: `Margli: демперов нет, ниже вас: ${cheaperCount}`,
+    };
   }
 
   // E) Есть демперы — показываем сколько и максимальное отставание
   const minDelta = Math.min(...dumpers.map((d) => deltaPct(d.price, state.myPrice as number)));
-  badge.innerHTML = `<span class="icon">🛡</span><span>Margli: ${dumpers.length} ${plural(dumpers.length, "демпер", "демпера", "демперов")}, ${minDelta.toFixed(1)}%</span>`;
+  return {
+    kind: "danger",
+    icon: "🛡",
+    text: `Margli: ${dumpers.length} ${plural(dumpers.length, "демпер", "демпера", "демперов")}, ${minDelta.toFixed(1)}%`,
+  };
+}
+
+/** kind → CSS-класс. `danger` без модификатора (как было у состояния E). */
+function badgeKindClass(kind: BadgeKind): string | null {
+  switch (kind) {
+    case "clean":
+      return "is-clean";
+    case "info":
+      return "is-info";
+    case "warn":
+      return "is-warn";
+    case "danger":
+      return null;
+  }
+}
+
+function renderBadge(badge: HTMLButtonElement, state: OverlayState): void {
+  // Очищаем модификаторы перед каждым ререндером
+  badge.classList.remove("is-clean", "is-warn", "is-info");
+
+  const { kind, icon, text } = computeBadge(state);
+  const cls = badgeKindClass(kind);
+  if (cls) badge.classList.add(cls);
+  badge.innerHTML = `<span class="icon">${icon}</span><span>${text}</span>`;
 }
 
 function renderDrawer(
@@ -258,6 +315,19 @@ function computeDumpers(state: OverlayState): Competitor[] {
     const delta = deltaPct(c.price, state.myPrice as number);
     return delta <= state.dumpingThresholdPct;
   });
+}
+
+/**
+ * Сколько конкурентов (исключая мой магазин) стоят строго дешевле меня.
+ * Используется чтобы бейдж не врал «конкурентов ниже нет», когда кто-то
+ * дешевле, но ещё не дотянул до порога демпинга.
+ */
+function countCheaperCompetitors(state: OverlayState): number {
+  if (state.myPrice == null) return 0;
+  const myPrice = state.myPrice;
+  return state.snapshot.competitors.filter(
+    (c) => c.shopName !== state.myShopName && c.price < myPrice,
+  ).length;
 }
 
 function deltaPct(price: number, basePrice: number): number {

@@ -27,6 +27,10 @@ const ROOT = join(__dirname, "..");
 const SRC = join(ROOT, "src");
 const DIST = join(ROOT, "dist");
 
+// Прод-сборка (npm run package): минифицируем и не кладём sourcemaps в zip.
+// Дев-сборка (npm run build): без минификации, popup с inline sourcemap.
+const IS_PROD = process.argv.includes("--prod");
+
 async function exists(p) {
   try {
     await access(p);
@@ -196,8 +200,8 @@ async function buildEntry(entryPoints, outdir, opts = {}) {
   await build({
     entryPoints,
     bundle: true,
-    minify: false,
-    sourcemap: "inline",
+    minify: IS_PROD,
+    sourcemap: IS_PROD ? false : "inline",
     target: "chrome116",
     format: "esm",
     outdir,
@@ -227,7 +231,7 @@ async function main() {
   await build({
     entryPoints: [join(SRC, "background", "worker.ts")],
     bundle: true,
-    minify: false,
+    minify: IS_PROD,
     sourcemap: false, // SW не любит inline sourcemaps в некоторых сборках
     target: "chrome116",
     format: "esm",
@@ -239,7 +243,7 @@ async function main() {
   await build({
     entryPoints: [join(SRC, "content", "shop-page.ts")],
     bundle: true,
-    minify: false,
+    minify: IS_PROD,
     sourcemap: false,
     target: "chrome116",
     format: "iife",
@@ -275,8 +279,8 @@ async function main() {
   await build({
     entryPoints: [join(SRC, "popup", "main.tsx")],
     bundle: true,
-    minify: false,
-    sourcemap: "inline",
+    minify: IS_PROD,
+    sourcemap: IS_PROD ? false : "inline",
     target: "chrome116",
     format: "esm",
     outfile: join(DIST, "popup", "popup.js"),

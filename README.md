@@ -4,13 +4,13 @@
 подсветка демперов, наблюдение за SKU, PDF-досье жалобы. Бесплатно, локально,
 без регистрации.
 
-**Закрытый альфа-тест.** Manifest V3 + TypeScript strict + React 19.
+**Закрытый альфа-тест, версия 0.1.0-alpha.8.** Manifest V3 + TypeScript strict + React 19.
 
 ## Для тестеров → [margli landing-page](https://yerkebulan-ardabayev.github.io/Margli-Extension/)
 
 Скачайте zip, распакуйте, Load Unpacked в Chrome — 4 шага, 30 секунд.
 
-📦 **Последний релиз:** [v0.1.0-alpha.7](https://github.com/Yerkebulan-Ardabayev/Margli-Extension/releases/latest)
+📦 **Последний релиз:** [v0.1.0-alpha.8](https://github.com/Yerkebulan-Ardabayev/Margli-Extension/releases/latest)
 
 🐛 **Баги/предложения:** [Issues](https://github.com/Yerkebulan-Ardabayev/Margli-Extension/issues)
 
@@ -20,7 +20,7 @@
 
 ```bash
 pnpm install
-pnpm test       # vitest, должно быть 127/127 passed
+pnpm test       # vitest, все тесты зелёные
 pnpm typecheck  # tsc --noEmit, 0 errors
 pnpm build      # → dist/ готов к Load Unpacked
 pnpm package    # build + zip → releases/margli-extension-v<version>.zip
@@ -38,8 +38,9 @@ pnpm package    # build + zip → releases/margli-extension-v<version>.zip
 
 При открытии любой карточки товара в правом нижнем углу появляется бейдж:
 
-- 🛡 **Margli: N демперов, −X%** — есть конкуренты с ценой ниже на ≥5%
-- ✅ **Margli: конкурентов ниже нет** — ты лидер по цене
+- 🛡 **Margli: N демперов, X%**: есть конкуренты ниже порога демпинга (по умолчанию -5%)
+- ✅ **Margli: вы дешевле всех**: никто не стоит ниже вашей цены
+- ℹ **Margli: демперов нет, ниже вас: N**: демперов нет, но N продавцов чуть дешевле вас
 
 Клик по бейджу открывает боковую панель:
 - Таблица продавцов отсортирована по цене (демперы вверху)
@@ -48,7 +49,13 @@ pnpm package    # build + zip → releases/margli-extension-v<version>.zip
 
 ### 2. Бейджи в кабинете селлера (`kaspi.kz/mc/products`, `/mc/orders`)
 
-К каждой строке товара/заказа добавляется inline-бейдж:
+> **Запланировано, в текущей сборке (0.1.0-alpha.8) НЕ включено.**
+> Парсер кабинета `/mc/*` отключён и не поставляется: его DOM-селекторы
+> ещё не проверены на реальном кабинете. В alpha.8 инжектится только
+> контент-скрипт для страницы товара `kaspi.kz/shop/p/*` (см. п. 1).
+
+Когда фича будет включена, к каждой строке товара/заказа добавится
+inline-бейдж:
 - 📊 Маржа в % (если задана себестоимость)
 - ⚠ Демпер −X% (если SKU под наблюдением и есть демпинг)
 
@@ -67,11 +74,11 @@ pnpm package    # build + zip → releases/margli-extension-v<version>.zip
 
 ### 4. Background worker
 
-- Каждые 30 минут перепроверяет watchlist
-- При появлении нового демпера → push-уведомление Chrome:
+- Когда вы открываете карточку отслеживаемого товара, Margli сверяет цены и при новом демпере шлёт push-уведомление Chrome:
   - 🛡 «Margli: новый демпер»
   - Кнопки «Открыть» / «Игнорировать»
 - «Игнорировать» добавляет shopId в blacklist для конкретного SKU
+- Фоновой перепроверки скрытым окном в этой сборке нет (убрана перед подачей в Web Store). Единственный фоновый таймер: раз в сутки flush анонимной телеметрии
 
 ### 5. Popup-дашборд
 
@@ -103,12 +110,11 @@ margli-extension/
 │  │  └─ storage.ts              # chrome.storage.local wrapper
 │  ├─ content/
 │  │  ├─ shop-page.ts            # injected на kaspi.kz/shop/p/*
-│  │  ├─ mc-products.ts          # injected на /mc/products|orders
+│  │  ├─ mc-products.ts          # /mc/products|orders — отключён в alpha.8
 │  │  ├─ overlay.ts              # бейдж + drawer (Shadow DOM)
 │  │  └─ overlay.css             # изолированные стили
 │  ├─ background/
-│  │  ├─ worker.ts               # MV3 service worker (alarms, notifications)
-│  │  └─ fetch-helper.ts         # regex-парсер HTML без DOMParser
+│  │  └─ worker.ts               # MV3 service worker (telemetry alarm, notifications)
 │  ├─ popup/
 │  │  ├─ index.html
 │  │  ├─ popup.css
@@ -118,13 +124,17 @@ margli-extension/
 │  │  ├─ Watchlist.tsx
 │  │  ├─ MarginCalculator.tsx
 │  │  └─ Settings.tsx
-│  └─ tests/
-│     ├─ margin-calc.test.ts     # ★ 17 тестов на расчёты
-│     ├─ kaspi-fees.test.ts      # ★ 22 теста на тарифы
-│     ├─ kz-taxes.test.ts        # ★ 18 тестов на налоги
+│  └─ tests/                     # vitest, юнит-тесты ядра (все зелёные)
+│     ├─ margin-calc.test.ts     # ★ расчёт маржи
+│     ├─ kaspi-fees.test.ts      # ★ тарифы Kaspi
+│     ├─ kz-taxes.test.ts        # ★ налоги РК
 │     ├─ kaspi-shop-parser.test.ts
-│     ├─ storage.test.ts
-│     └─ fetch-helper.test.ts
+│     ├─ kaspi-offers-api.test.ts # offer-view API (все продавцы со всех страниц)
+│     ├─ shop-match.test.ts      # эластичный матч магазина
+│     ├─ overlay-badge.test.ts   # состояния бейджа
+│     ├─ telemetry.test.ts
+│     ├─ kaspi-mc-parser.test.ts
+│     └─ storage.test.ts
 └─ dist/                          # ← сюда собирается, грузится в Chrome
 ```
 
@@ -178,6 +188,7 @@ pnpm build          # esbuild → dist/
 - `src/lib/kaspi-shop-parser.ts` → `ROW_SELECTORS`, `extractName()`,
   `extractBasePrice()`, `extractCompetitors()`
 - `src/lib/kaspi-mc-parser.ts` → `PRODUCT_ROW_SELECTORS`, `ORDER_ROW_SELECTORS`
+  (парсер кабинета, в alpha.8 отключён, см. п. 2)
 
 Парсер логирует в консоль какой селектор сработал
 (`[Margli/parser] price from .item__price-once → 25990`). При поломке открой
@@ -195,8 +206,8 @@ DevTools на странице товара, скопируй HTML строки 
 - [ ] Кнопка «Игнорировать» в notification работает только если расширение
       запущено — после рестарта Chrome notification ID забывается. Это
       ограничение MV3 service worker'а.
-- [ ] Перепроверка раз в 30 мин — без exponential backoff. При 100+ SKU
-      и медленном Kaspi'е проход может затянуться. Добавить throttling
-      и параллелизацию.
+- [ ] Фоновая перепроверка watchlist отключена (убрана перед Web Store).
+      Вернуть можно через offer-view API (fetch всех продавцов без скрытого
+      окна) по chrome.alarms, когда появится воронка тестеров.
 - [ ] `default_locale` в манифесте не установлен — все строки UI хардкодом
       на русском. При локализации на казахский — добавить `_locales/`.
