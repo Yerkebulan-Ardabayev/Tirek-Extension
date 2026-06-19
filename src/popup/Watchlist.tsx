@@ -7,11 +7,18 @@ import {
 } from "../lib/storage";
 import type { SkuCostProfile, WatchlistItem } from "../lib/types";
 import { getCategoryOptions } from "../lib/kaspi-fees";
+import {
+  FREE_WATCHLIST_LIMIT,
+  getLicense,
+  isWatchlistLimitReached,
+  type License,
+} from "../lib/license";
 
 export function Watchlist() {
   const [items, setItems] = useState<WatchlistItem[] | null>(null);
   const [editingSku, setEditingSku] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<SkuCostProfile>>({});
+  const [lic, setLic] = useState<License | null>(null);
 
   const refresh = useCallback(async () => {
     setItems(await getWatchlist());
@@ -19,6 +26,7 @@ export function Watchlist() {
 
   useEffect(() => {
     refresh();
+    getLicense().then(setLic);
   }, [refresh]);
 
   const startEdit = useCallback(async (sku: string) => {
@@ -62,7 +70,26 @@ export function Watchlist() {
 
   return (
     <>
-      <div className="section-title">Под наблюдением ({items.length})</div>
+      <div className="section-title">
+        Под наблюдением{" "}
+        {lic?.pro ? `(${items.length})` : `(${items.length}/${FREE_WATCHLIST_LIMIT})`}
+      </div>
+      {lic && isWatchlistLimitReached(items.length, lic) && (
+        <div
+          style={{
+            fontSize: 11,
+            lineHeight: 1.5,
+            padding: "8px 10px",
+            marginBottom: 8,
+            borderRadius: 6,
+            background: "rgba(167,139,250,0.12)",
+            color: "var(--text-muted)",
+          }}
+        >
+          Достигнут лимит бесплатного тарифа ({FREE_WATCHLIST_LIMIT} товара). Pro —
+          безлимит. Откройте «Настройки» → «Тариф».
+        </div>
+      )}
       {items.map((it) => {
         const isEdit = editingSku === it.sku;
         return (

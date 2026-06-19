@@ -1,17 +1,42 @@
 import { useEffect, useState } from "react";
-import { getSettings, setSettings } from "../lib/storage";
+import { getSettings, setSettings, getWatchlist } from "../lib/storage";
 import type { SellerSettings } from "../lib/types";
 import { getCategoryOptions } from "../lib/kaspi-fees";
 import { getTaxRegimeOptions, TAX_REGIME_INFO } from "../lib/kz-taxes";
+import {
+  FREE_WATCHLIST_LIMIT,
+  PRICE_MONTHLY_TENGE,
+  SUPPORT_CONTACT_URL,
+  activateProCode,
+  getLicense,
+  type License,
+} from "../lib/license";
 
 export function Settings() {
   const [s, setS] = useState<SellerSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [lic, setLic] = useState<License | null>(null);
+  const [watchCount, setWatchCount] = useState(0);
+  const [code, setCode] = useState("");
+  const [codeMsg, setCodeMsg] = useState<string | null>(null);
 
   useEffect(() => {
     getSettings().then(setS);
+    getLicense().then(setLic);
+    getWatchlist().then((w) => setWatchCount(w.length));
   }, []);
+
+  const activate = async () => {
+    const res = await activateProCode(code);
+    if (res.ok) {
+      setLic(await getLicense());
+      setCode("");
+      setCodeMsg("✓ Pro активирован. Спасибо!");
+    } else {
+      setCodeMsg(res.error ?? "Не удалось активировать код");
+    }
+  };
 
   const update = async (patch: Partial<SellerSettings>) => {
     if (!s) return;
@@ -146,6 +171,75 @@ export function Settings() {
         счётчики «открыл карточку / добавил в watchlist / открыл калькулятор».
         Цены, SKU, имя магазина и ссылки — НЕ отправляются.
       </div>
+
+      <div className="section-title">Тариф</div>
+      {lic?.pro ? (
+        <div className="form-row">
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--brand-300, #a78bfa)" }}>
+            ✓ Pro активен — безлимит товаров под наблюдением
+          </div>
+          {lic.code && (
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+              Код: {lic.code}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 8 }}>
+            Бесплатно: калькулятор маржи без лимита и наблюдение за{" "}
+            {FREE_WATCHLIST_LIMIT} товарами (сейчас {watchCount}/{FREE_WATCHLIST_LIMIT}).
+            <br />
+            <b>Pro — {PRICE_MONTHLY_TENGE.toLocaleString("ru-RU")} ₸/мес:</b> безлимит
+            товаров под наблюдением и анти-демпинг по всему портфелю.
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              lineHeight: 1.5,
+              marginBottom: 8,
+            }}
+          >
+            Оплата: Kaspi-перевод {PRICE_MONTHLY_TENGE.toLocaleString("ru-RU")} ₸ →
+            пришлите чек в поддержку → получите код активации.
+          </div>
+          <a
+            className="btn"
+            href={SUPPORT_CONTACT_URL}
+            target="_blank"
+            rel="noreferrer"
+            style={{ display: "inline-block", marginBottom: 10 }}
+          >
+            Оформить Pro через Kaspi
+          </a>
+          <div className="form-row">
+            <label>У меня есть Pro-код</label>
+            <input
+              type="text"
+              value={code}
+              placeholder="MARGLI-PRO-XXXX"
+              onChange={(e) => {
+                setCode(e.target.value);
+                setCodeMsg(null);
+              }}
+            />
+            <button
+              className="btn ghost"
+              style={{ marginTop: 6 }}
+              onClick={activate}
+              disabled={!code.trim()}
+            >
+              Активировать
+            </button>
+            {codeMsg && (
+              <div style={{ fontSize: 11, marginTop: 6, color: "var(--text-muted)" }}>
+                {codeMsg}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="hr" />
 

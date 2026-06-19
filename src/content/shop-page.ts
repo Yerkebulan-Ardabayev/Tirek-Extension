@@ -15,6 +15,7 @@ import {
   getSettings,
   getWatchlist,
 } from "../lib/storage";
+import { getLicense, isWatchlistLimitReached } from "../lib/license";
 import { trackError, trackEvent } from "../lib/telemetry";
 import type { Competitor, ShopPageSnapshot, WatchlistItem } from "../lib/types";
 import { mountOverlay, type OverlayState } from "./overlay";
@@ -231,6 +232,17 @@ async function addToWatchlistFromSnapshot(
     blacklistedShopIds: [],
     dumpersCount: dumpers.length,
   };
+  // Фримиум-лимит: бесплатно следим за FREE_WATCHLIST_LIMIT товарами.
+  // Уже добавленный SKU (обновление) лимит не трогает — режем только новые.
+  const list = await getWatchlist();
+  const alreadyWatched = list.some((w) => w.sku === item.sku);
+  if (!alreadyWatched) {
+    const license = await getLicense();
+    if (isWatchlistLimitReached(list.length, license)) {
+      console.log("[Margli] watchlist free limit reached", { count: list.length });
+      return false;
+    }
+  }
   await addToWatchlist(item);
   void trackEvent("watchlist_added");
   return true;

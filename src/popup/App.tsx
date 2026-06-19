@@ -7,19 +7,22 @@ import { Onboarding } from "./Onboarding";
 import { getSettings } from "../lib/storage";
 import { trackEvent } from "../lib/telemetry";
 
-type Tab = "today" | "watch" | "calc" | "settings";
+type Tab = "calc" | "today" | "watch" | "settings";
 
+// Калькулятор реальной маржи — «гвоздь» продукта: первый в ряду и открыт по умолчанию.
+// Демпинг-сводка (Демперы/Наблюдение) — крючок удержания. Порядок отражает фокус:
+// сначала маржа, потом демпинг. Названия вкладок говорят, что покупает селлер.
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "today", label: "Сегодня" },
+  { id: "calc", label: "Маржа" },
+  { id: "today", label: "Демперы" },
   { id: "watch", label: "Наблюдение" },
-  { id: "calc", label: "Калькулятор" },
   { id: "settings", label: "Настройки" },
 ];
 
 const ONBOARDING_SKIP_KEY = "margli:onboarding-skipped";
 
 export function App() {
-  const [tab, setTab] = useState<Tab>("today");
+  const [tab, setTab] = useState<Tab>("calc");
   const [version, setVersion] = useState("0.1.0-alpha");
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
 
@@ -33,7 +36,11 @@ export function App() {
       const skipped =
         typeof localStorage !== "undefined" &&
         localStorage.getItem(ONBOARDING_SKIP_KEY) === "1";
-      setShowOnboarding(!s.myShopId && !skipped);
+      const willShowOnboarding = !s.myShopId && !skipped;
+      setShowOnboarding(willShowOnboarding);
+      // «Маржа» — вкладка по умолчанию: если онбординг не показываем, попап
+      // открылся сразу на калькуляторе, считаем это открытием калькулятора.
+      if (!willShowOnboarding) void trackEvent("calc_opened");
     })();
   }, []);
 
@@ -79,6 +86,13 @@ export function App() {
         </div>
         <span className="version">v{version}</span>
       </header>
+
+      <div
+        className="tagline"
+        style={{ padding: "2px 14px 8px", fontSize: 11, lineHeight: 1.3, opacity: 0.6 }}
+      >
+        Реальная маржа по товару и анти-демпинг прямо на Kaspi
+      </div>
 
       <nav className="tabs">
         {TABS.map((t) => (

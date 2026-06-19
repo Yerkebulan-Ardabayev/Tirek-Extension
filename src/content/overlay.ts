@@ -252,6 +252,11 @@ function renderDrawer(
         state.isWatched = true;
         showToast(shadow, "Добавлено в под наблюдением");
         renderDrawer(drawer, state, callbacks, shadow);
+      } else {
+        showToast(
+          shadow,
+          "Лимит 3 товара на бесплатном тарифе. Откройте Margli → Настройки → Тариф.",
+        );
       }
     } finally {
       watchBtn.disabled = false;
