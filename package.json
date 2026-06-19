@@ -1,6 +1,6 @@
 {
   "name": "margli-extension",
-  "version": "0.1.0-alpha.9",
+  "version": "0.1.0-alpha.10",
   "private": true,
   "description": "Margli — Kaspi анти-демпинг и калькулятор реальной маржи (Chrome MV3)",
   "type": "module",
