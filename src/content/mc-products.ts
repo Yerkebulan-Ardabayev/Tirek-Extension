@@ -163,7 +163,7 @@ function showBanner(): void {
           таблицы — обновим парсер.
         </div>
       </div>
-      <button type="button" id="${BANNER_ID}-close" style="background:transparent;border:0;color:#a1a1aa;cursor:pointer;font-size:16px">✕</button>
+      <button type="button" id="${BANNER_ID}-close" style="background:transparent;border:0;color:#78716c;cursor:pointer;font-size:16px">✕</button>
     </div>
   `;
   Object.assign(div.style, {
@@ -171,9 +171,9 @@ function showBanner(): void {
     bottom: "20px",
     right: "20px",
     width: "320px",
-    background: "#1a1625",
-    color: "#f5f3ff",
-    border: "1px solid rgba(167,139,250,0.3)",
+    background: "#fffdf7",
+    color: "#1c1917",
+    border: "1px solid rgba(234,88,12,0.3)",
     borderRadius: "10px",
     padding: "12px 14px",
     zIndex: "999999",

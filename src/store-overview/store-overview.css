@@ -1,21 +1,21 @@
 /*
  * Стили страницы «Обзор магазина» (фаза 2). Полноэкранная страница расширения,
- * тёмная тема как у popup (та же палитра brand #a78bfa).
+ * Тема «Тёплый солнечный»: кремовый фон, оранжевый акцент (brand #ea580c).
  */
 
 :root {
-  color-scheme: dark;
-  --bg: #1a1625;
-  --bg-elev: #221d31;
-  --bg-hover: #2a253d;
-  --text: #f5f3ff;
-  --text-muted: #a1a1aa;
-  --border: rgba(167, 139, 250, 0.18);
-  --brand: #a78bfa;
-  --brand-strong: #7c3aed;
-  --success: #10b981;
-  --warn: #f59e0b;
-  --danger: #ef4444;
+  color-scheme: light;
+  --bg: #fffdf7;
+  --bg-elev: #fff7ed;
+  --bg-hover: #ffedd5;
+  --text: #1c1917;
+  --text-muted: #78716c;
+  --border: #fde9c8;
+  --brand: #ea580c;
+  --brand-strong: #c2410c;
+  --success: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
 
   /* Сетка таблицы: товар широкий, остальные равные. Делится header и строками. */
   --cols: minmax(200px, 2.4fr) 1fr 1fr 1fr 1.1fr 1.1fr 0.8fr 1.2fr 1.1fr 0.8fr;
@@ -78,7 +78,7 @@ body {
   padding: 0 7px;
   border-radius: 9px;
   background: linear-gradient(135deg, var(--warn), #f97316);
-  color: #1a1625;
+  color: #7c2d12;
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
@@ -216,11 +216,11 @@ body {
   padding: 10px 20px;
   background: rgba(245, 158, 11, 0.12);
   border-bottom: 1px solid rgba(245, 158, 11, 0.4);
-  color: var(--warn);
+  color: #b45309;
   font-size: 12px;
 }
 .stale-banner a {
-  color: var(--warn);
+  color: #b45309;
   font-weight: 700;
 }
 

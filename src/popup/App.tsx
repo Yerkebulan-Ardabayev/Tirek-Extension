@@ -53,7 +53,7 @@ export function App() {
       <>
         <header className="app-header">
           <div className="logo">
-            <span className="mark">M</span>
+            <span className="mark">T</span>
             <span>Tirek</span>
             <span className="alpha-pill">ALPHA</span>
           </div>
@@ -80,7 +80,7 @@ export function App() {
     <>
       <header className="app-header">
         <div className="logo">
-          <span className="mark">M</span>
+          <span className="mark">T</span>
           <span>Tirek</span>
           <span className="alpha-pill">ALPHA</span>
         </div>
@@ -100,7 +100,7 @@ export function App() {
           const url = chrome.runtime.getURL("store-overview/index.html");
           // Открываем ОТДЕЛЬНЫМ окном, а не вкладкой: его удобно держать рядом
           // с Kaspi и закрыть кнопкой «Закрыть», вернувшись к калькулятору
-          // (клик по иконке M). Если windows API нет — fallback на вкладку.
+          // (клик по иконке T). Если windows API нет — fallback на вкладку.
           if (chrome.windows?.create) {
             void chrome.windows.create({ url, type: "popup", width: 1200, height: 820 });
           } else if (chrome.tabs?.create) {

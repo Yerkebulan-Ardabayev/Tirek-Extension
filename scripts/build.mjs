@@ -74,10 +74,10 @@ function createPlaceholderPng(size) {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const t = (x + y) / (width + height);
-      // brand-700 (#5b21b6) → brand-300 (#a78bfa)
-      const r = Math.round(0x5b + (0xa7 - 0x5b) * t);
-      const g = Math.round(0x21 + (0x8b - 0x21) * t);
-      const b = Math.round(0xb6 + (0xfa - 0xb6) * t);
+      // orange-700 (#c2410c) → orange-400 (#fb923c) — тёплый солнечный градиент
+      const r = Math.round(0xc2 + (0xfb - 0xc2) * t);
+      const g = Math.round(0x41 + (0x92 - 0x41) * t);
+      const b = Math.round(0x0c + (0x3c - 0x0c) * t);
       const i = (y * width + x) * 4;
       pixels[i] = r;
       pixels[i + 1] = g;
@@ -86,9 +86,8 @@ function createPlaceholderPng(size) {
     }
   }
 
-  // Рисуем «M» по центру белым.
-  // Простая bitmap-маска для буквы M — через геометрию (3 вертикальных линии + 2 диагонали).
-  const stroke = Math.max(1, Math.round(size / 12));
+  // Рисуем «T» по центру белым (Tirek): верхняя перекладина + центральная ножка.
+  const stroke = Math.max(1, Math.round(size / 10));
   const inset = Math.round(size / 5);
   const top = inset;
   const bottom = size - inset;
@@ -111,25 +110,16 @@ function createPlaceholderPng(size) {
       }
     }
   }
-  function drawDiagonal(x0, y0, x1, y1) {
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const steps = Math.max(Math.abs(dx), Math.abs(dy));
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const x = Math.round(x0 + dx * t);
-      const y = Math.round(y0 + dy * t);
+  function drawHorizontalLine(y, x0, x1) {
+    for (let x = x0; x <= x1; x++) {
       for (let s = 0; s < stroke; s++) {
-        setPixel(x + s, y);
         setPixel(x, y + s);
       }
     }
   }
 
-  drawVerticalLine(left, top, bottom);
-  drawVerticalLine(right - stroke + 1, top, bottom);
-  drawDiagonal(left, top, midX, Math.round(bottom * 0.6));
-  drawDiagonal(right - stroke + 1, top, midX, Math.round(bottom * 0.6));
+  drawHorizontalLine(top, left, right);
+  drawVerticalLine(midX - Math.floor(stroke / 2), top, bottom);
 
   return encodePng(width, height, pixels);
 }

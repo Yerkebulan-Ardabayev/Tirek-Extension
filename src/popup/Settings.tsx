@@ -200,7 +200,7 @@ export function Settings() {
       <div className="section-title">Тариф</div>
       {lic?.pro ? (
         <div className="form-row">
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--brand-300, #a78bfa)" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--brand, #ea580c)" }}>
             ✓ Pro активен — безлимит товаров под наблюдением
           </div>
           {lic.code && (

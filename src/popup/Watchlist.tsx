@@ -82,7 +82,7 @@ export function Watchlist() {
             padding: "8px 10px",
             marginBottom: 8,
             borderRadius: 6,
-            background: "rgba(167,139,250,0.12)",
+            background: "rgba(234,88,12,0.10)",
             color: "var(--text-muted)",
           }}
         >

@@ -397,7 +397,7 @@ export function App() {
   return (
     <>
       <header className="so-header">
-        <span className="mark">M</span>
+        <span className="mark">T</span>
         <h1>Обзор магазина</h1>
         <span className="alpha-pill">Alpha</span>
         <span className="spacer" />

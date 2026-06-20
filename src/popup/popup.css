@@ -4,18 +4,18 @@
  */
 
 :root {
-  color-scheme: dark;
-  --bg: #1a1625;
-  --bg-elev: #221d31;
-  --bg-hover: #2a253d;
-  --text: #f5f3ff;
-  --text-muted: #a1a1aa;
-  --border: rgba(167, 139, 250, 0.18);
-  --brand: #a78bfa;
-  --brand-strong: #7c3aed;
-  --success: #10b981;
-  --warn: #f59e0b;
-  --danger: #ef4444;
+  color-scheme: light;
+  --bg: #fffdf7;
+  --bg-elev: #fff7ed;
+  --bg-hover: #ffedd5;
+  --text: #1c1917;
+  --text-muted: #78716c;
+  --border: #fde9c8;
+  --brand: #ea580c;
+  --brand-strong: #c2410c;
+  --success: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
 }
 
 * {
@@ -85,7 +85,7 @@ body {
   margin-left: 4px;
   border-radius: 9px;
   background: linear-gradient(135deg, var(--warn), #f97316);
-  color: #1a1625;
+  color: #7c2d12;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -293,12 +293,12 @@ body {
   display: flex;
   justify-content: space-between;
   padding: 4px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(28,25,23,0.07);
 }
 .breakdown .row:last-child { border-bottom: 0; }
 .breakdown .row .label { color: var(--text-muted); }
 .breakdown .row .amount { font-feature-settings: "tnum"; font-weight: 600; }
-.breakdown .row.expense .amount { color: #fca5a5; }
+.breakdown .row.expense .amount { color: #dc2626; }
 .breakdown .row.income .amount { color: var(--success); }
 .breakdown .row.total {
   font-weight: 700;
@@ -323,11 +323,11 @@ body {
 }
 .btn:active { transform: translateY(1px); }
 .btn.ghost {
-  background: rgba(167,139,250,0.12);
+  background: rgba(234,88,12,0.10);
   color: var(--text);
   border: 1px solid var(--border);
 }
-.btn.ghost:hover { background: rgba(167,139,250,0.2); }
+.btn.ghost:hover { background: rgba(234,88,12,0.18); }
 .btn-row {
   display: flex;
   gap: 8px;
@@ -338,7 +338,7 @@ body {
 .notice {
   background: rgba(245,158,11,0.12);
   border: 1px solid rgba(245,158,11,0.3);
-  color: #fbbf24;
+  color: #b45309;
   padding: 8px 10px;
   border-radius: 8px;
   font-size: 12px;
@@ -359,7 +359,7 @@ a:hover { text-decoration: underline; }
   width: 6px;
 }
 .tab-panel::-webkit-scrollbar-thumb {
-  background: rgba(167,139,250,0.2);
+  background: rgba(234,88,12,0.3);
   border-radius: 3px;
 }
 .tab-panel::-webkit-scrollbar-track {
