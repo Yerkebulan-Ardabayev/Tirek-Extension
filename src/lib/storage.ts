@@ -15,6 +15,9 @@ import type {
   Competitor,
   SellerSettings,
   SkuCostProfile,
+  StoreDumping,
+  StoreLoadProgress,
+  StoreSnapshot,
   WatchlistItem,
 } from "./types";
 
@@ -23,7 +26,28 @@ const KEYS = {
   watchlist: "margli:watchlist",
   costs: "margli:costs",
   lastSeen: "margli:lastSeen",
+  /** Префикс снимка магазина: margli:store:<merchantId>. */
+  storePrefix: "margli:store:",
+  /** Прогресс текущей загрузки обзора. */
+  storeProgress: "margli:store:progress",
 } as const;
+
+/** Ключ снимка конкретного магазина. */
+export function storeKey(merchantId: string): string {
+  return KEYS.storePrefix + merchantId;
+}
+
+/**
+ * TTL снимка листинга магазина (цены товаров). Повторный заход в пределах TTL
+ * берёт из кэша мгновенно. По умолчанию 6 часов.
+ */
+export const STORE_SNAPSHOT_TTL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * TTL демпинг-результата по SKU (дорогой запрос). По умолчанию 2 часа —
+ * середина рекомендованного spec диапазона 1-3 ч.
+ */
+export const DUMPING_TTL_MS = 2 * 60 * 60 * 1000;
 
 /** Дефолтные настройки. */
 export const DEFAULT_SETTINGS: SellerSettings = {
@@ -161,6 +185,78 @@ export async function setLastSeen(sku: string, competitors: Competitor[]): Promi
   const all = (await getRaw<Record<string, Competitor[]>>(KEYS.lastSeen)) ?? {};
   all[sku] = competitors;
   await setRaw(KEYS.lastSeen, all);
+}
+
+// --- store snapshot (фаза 2 «Обзор магазина») -------------------------------
+
+export async function getStoreSnapshot(merchantId: string): Promise<StoreSnapshot | null> {
+  return (await getRaw<StoreSnapshot>(storeKey(merchantId))) ?? null;
+}
+
+/**
+ * Все кэшированные снимки магазинов (для выбора последнего открытого в UI).
+ * Сканирует ключи margli:store:<id>, исключая служебный margli:store:progress.
+ */
+export async function getAllStoreSnapshots(): Promise<StoreSnapshot[]> {
+  if (!isChromeStorageAvailable()) return [];
+  const all = await chrome.storage.local.get(null);
+  const out: StoreSnapshot[] = [];
+  for (const [k, v] of Object.entries(all)) {
+    if (k.startsWith(KEYS.storePrefix) && k !== KEYS.storeProgress && v && typeof v === "object") {
+      out.push(v as StoreSnapshot);
+    }
+  }
+  return out;
+}
+
+export async function setStoreSnapshot(snapshot: StoreSnapshot): Promise<void> {
+  await setRaw(storeKey(snapshot.merchantId), snapshot);
+}
+
+/**
+ * Точечно записать демпинг-результат по одному SKU в снимок магазина.
+ * Не перезаписывает товары — только обновляет dumping[sku]. No-op, если
+ * снимка ещё нет (демпинг считается после листинга).
+ */
+export async function updateStoreDumping(
+  merchantId: string,
+  sku: string,
+  result: StoreDumping,
+): Promise<void> {
+  const snap = await getStoreSnapshot(merchantId);
+  if (!snap) return;
+  snap.dumping[sku] = result;
+  await setStoreSnapshot(snap);
+}
+
+/** Свеж ли снимок листинга (в пределах TTL). */
+export function isSnapshotFresh(
+  snapshot: StoreSnapshot | null,
+  now: number = Date.now(),
+  ttlMs: number = STORE_SNAPSHOT_TTL_MS,
+): boolean {
+  if (!snapshot) return false;
+  return now - snapshot.fetchedAt < ttlMs;
+}
+
+/** Свеж ли демпинг-результат по SKU (в пределах TTL). */
+export function isDumpingFresh(
+  result: StoreDumping | undefined | null,
+  now: number = Date.now(),
+  ttlMs: number = DUMPING_TTL_MS,
+): boolean {
+  if (!result) return false;
+  return now - result.at < ttlMs;
+}
+
+// --- store progress ---------------------------------------------------------
+
+export async function getStoreProgress(): Promise<StoreLoadProgress | null> {
+  return (await getRaw<StoreLoadProgress>(KEYS.storeProgress)) ?? null;
+}
+
+export async function setStoreProgress(progress: StoreLoadProgress): Promise<void> {
+  await setRaw(KEYS.storeProgress, progress);
 }
 
 // --- export для тестов ------------------------------------------------------

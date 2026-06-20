@@ -272,15 +272,44 @@ describe("calculateTax — ТОО ОУР", () => {
   });
 });
 
+describe("calculateTax — ИП ОУР", () => {
+  it("ИПН 10% с прибыли + НДС 16% с оборота", () => {
+    const r = calculateTax({
+      revenue: 100_000,
+      profitBeforeTax: 30_000,
+      regime: "ip-osnovnoy",
+    });
+    // ИПН: 30 000 × 0.10 = 3 000
+    // НДС: 100 000 × 0.16 = 16 000
+    // Итого: 19 000
+    expect(r.amount).toBe(19000);
+    const labels = r.breakdown.map((b) => b.label);
+    expect(labels.some((l) => l.includes("ИПН"))).toBe(true);
+    expect(labels.some((l) => l.includes("НДС"))).toBe(true);
+    // ИП на ОУР платит ИПН, а НЕ КПН
+    expect(labels.some((l) => l.includes("КПН"))).toBe(false);
+  });
+
+  it("на убытке ИПН=0, НДС всё равно платится", () => {
+    const r = calculateTax({
+      revenue: 100_000,
+      profitBeforeTax: -10_000,
+      regime: "ip-osnovnoy",
+    });
+    expect(r.amount).toBe(16000);
+  });
+});
+
 describe("getTaxRegimeOptions", () => {
-  it("3 варианта", () => {
+  it("4 варианта (добавлен ИП ОУР)", () => {
     const opts = getTaxRegimeOptions();
-    expect(opts.length).toBe(3);
+    expect(opts.length).toBe(4);
   });
 
   it("упоминают ставки в label", () => {
     const opts = getTaxRegimeOptions();
     expect(opts.some((o) => o.label.includes("4%"))).toBe(true);
     expect(opts.some((o) => o.label.includes("20%"))).toBe(true);
+    expect(opts.some((o) => o.label.includes("ИПН"))).toBe(true);
   });
 });

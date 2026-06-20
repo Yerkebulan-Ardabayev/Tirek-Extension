@@ -26,6 +26,23 @@ describe("manifest web_accessible_resources", () => {
   });
 });
 
+describe("manifest host_permissions", () => {
+  it("есть доступ к offer-view (демпинг-пересчёт со страницы обзора)", () => {
+    const hp = manifest.host_permissions ?? [];
+    expect(hp).toContain("https://kaspi.kz/yml/offer-view/*");
+  });
+
+  it("host_permissions остаются минимальными (только kaspi.kz, без широких *)", () => {
+    for (const h of manifest.host_permissions ?? []) {
+      expect(h, `host_permission «${h}» должен быть на kaspi.kz`).toMatch(
+        /^https:\/\/kaspi\.kz\//,
+      );
+      // не допускаем сверхширокий https://kaspi.kz/* без пути
+      expect(h).not.toBe("https://kaspi.kz/*");
+    }
+  });
+});
+
 describe("manifest версия", () => {
   it("version_name синхронен с package.json", () => {
     expect(manifest.version_name).toBe(pkg.version);

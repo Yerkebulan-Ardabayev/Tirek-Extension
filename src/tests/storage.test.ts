@@ -1,15 +1,26 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   DEFAULT_SETTINGS,
+  DUMPING_TTL_MS,
+  STORE_SNAPSHOT_TTL_MS,
   addToWatchlist,
   blacklistShopForSku,
+  getAllStoreSnapshots,
   getSettings,
+  getStoreProgress,
+  getStoreSnapshot,
   getWatchlist,
+  isDumpingFresh,
+  isSnapshotFresh,
   removeFromWatchlist,
   setSettings,
+  setStoreProgress,
+  setStoreSnapshot,
+  storeKey,
+  updateStoreDumping,
   updateWatchlistItem,
 } from "../lib/storage";
-import type { WatchlistItem } from "../lib/types";
+import type { StoreSnapshot, WatchlistItem } from "../lib/types";
 
 // --- mock chrome.storage.local ---------------------------------------------
 
@@ -18,7 +29,10 @@ beforeEach(() => {
   const fakeChrome = {
     storage: {
       local: {
-        get: async (key: string | string[]) => {
+        get: async (key: string | string[] | null) => {
+          if (key === null || key === undefined) {
+            return { ...store }; // get(null) → весь стор
+          }
           if (typeof key === "string") {
             return key in store ? { [key]: store[key] } : {};
           }
@@ -120,5 +134,130 @@ describe("watchlist storage", () => {
     await blacklistShopForSku("100", "shop-7421");
     const list = await getWatchlist();
     expect(list[0]?.blacklistedShopIds.length).toBe(1);
+  });
+});
+
+describe("store snapshot storage (фаза 2)", () => {
+  const mkSnapshot = (merchantId: string, fetchedAt = Date.now()): StoreSnapshot => ({
+    merchantId,
+    name: "Test Shop",
+    fetchedAt,
+    products: [
+      { sku: "111", name: "Товар A", price: 1000, url: "https://kaspi.kz/shop/p/a-111/" },
+      { sku: "222", name: "Товар B", price: 2000, url: "https://kaspi.kz/shop/p/b-222/" },
+    ],
+    dumping: {},
+  });
+
+  it("storeKey формирует ключ с префиксом и merchantId", () => {
+    expect(storeKey("30386321")).toBe("margli:store:30386321");
+  });
+
+  it("getStoreSnapshot возвращает null если ничего не сохранено", async () => {
+    expect(await getStoreSnapshot("404")).toBeNull();
+  });
+
+  it("set/getStoreSnapshot сохраняет и читает по merchantId", async () => {
+    await setStoreSnapshot(mkSnapshot("30386321"));
+    const snap = await getStoreSnapshot("30386321");
+    expect(snap?.products.length).toBe(2);
+    expect(snap?.name).toBe("Test Shop");
+  });
+
+  it("снимки разных магазинов не пересекаются", async () => {
+    await setStoreSnapshot(mkSnapshot("111"));
+    await setStoreSnapshot(mkSnapshot("222"));
+    expect((await getStoreSnapshot("111"))?.merchantId).toBe("111");
+    expect((await getStoreSnapshot("222"))?.merchantId).toBe("222");
+  });
+
+  it("updateStoreDumping точечно пишет результат по SKU, не трогая товары", async () => {
+    await setStoreSnapshot(mkSnapshot("30386321"));
+    await updateStoreDumping("30386321", "111", {
+      minCompetitor: 950,
+      dumpersCount: 2,
+      competitorsCount: 5,
+      at: Date.now(),
+    });
+    const snap = await getStoreSnapshot("30386321");
+    expect(snap?.products.length).toBe(2); // товары на месте
+    expect(snap?.dumping["111"]?.dumpersCount).toBe(2);
+    expect(snap?.dumping["222"]).toBeUndefined();
+  });
+
+  it("updateStoreDumping — no-op если снимка ещё нет", async () => {
+    await updateStoreDumping("nope", "111", {
+      minCompetitor: 1,
+      dumpersCount: 0,
+      competitorsCount: 1,
+      at: Date.now(),
+    });
+    expect(await getStoreSnapshot("nope")).toBeNull();
+  });
+
+  it("getAllStoreSnapshots собирает все магазины, исключая progress-ключ", async () => {
+    await setStoreSnapshot(mkSnapshot("111"));
+    await setStoreSnapshot(mkSnapshot("222"));
+    await setStoreProgress({
+      merchantId: "111",
+      phase: "listing",
+      productsLoaded: 1,
+      productsTotal: 2,
+      dempingDone: 0,
+      dempingTotal: 0,
+      updatedAt: Date.now(),
+    });
+    const snaps = await getAllStoreSnapshots();
+    expect(snaps.map((s) => s.merchantId).sort()).toEqual(["111", "222"]);
+  });
+});
+
+describe("store freshness / TTL", () => {
+  const base: StoreSnapshot = {
+    merchantId: "1",
+    name: null,
+    fetchedAt: 1_000_000,
+    products: [],
+    dumping: {},
+  };
+
+  it("isSnapshotFresh: свежий в пределах TTL", () => {
+    expect(isSnapshotFresh(base, base.fetchedAt + STORE_SNAPSHOT_TTL_MS - 1)).toBe(true);
+  });
+  it("isSnapshotFresh: протух за TTL", () => {
+    expect(isSnapshotFresh(base, base.fetchedAt + STORE_SNAPSHOT_TTL_MS + 1)).toBe(false);
+  });
+  it("isSnapshotFresh: null — не свежий", () => {
+    expect(isSnapshotFresh(null, 0)).toBe(false);
+  });
+
+  it("isDumpingFresh: свежий в пределах TTL", () => {
+    const r = { minCompetitor: 1, dumpersCount: 0, competitorsCount: 1, at: 5_000 };
+    expect(isDumpingFresh(r, 5_000 + DUMPING_TTL_MS - 1)).toBe(true);
+    expect(isDumpingFresh(r, 5_000 + DUMPING_TTL_MS + 1)).toBe(false);
+  });
+  it("isDumpingFresh: undefined — не свежий", () => {
+    expect(isDumpingFresh(undefined, 0)).toBe(false);
+  });
+});
+
+describe("store progress storage", () => {
+  it("getStoreProgress null по умолчанию", async () => {
+    expect(await getStoreProgress()).toBeNull();
+  });
+
+  it("set/getStoreProgress сохраняет прогресс", async () => {
+    await setStoreProgress({
+      merchantId: "30386321",
+      phase: "listing",
+      productsLoaded: 24,
+      productsTotal: 120,
+      dempingDone: 0,
+      dempingTotal: 50,
+      updatedAt: Date.now(),
+    });
+    const p = await getStoreProgress();
+    expect(p?.phase).toBe("listing");
+    expect(p?.productsLoaded).toBe(24);
   });
 });

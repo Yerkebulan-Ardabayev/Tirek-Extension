@@ -218,6 +218,7 @@ async function main() {
   await mkdir(join(DIST, "background"), { recursive: true });
   await mkdir(join(DIST, "content"), { recursive: true });
   await mkdir(join(DIST, "popup"), { recursive: true });
+  await mkdir(join(DIST, "store-overview"), { recursive: true });
 
   console.log("[build] manifest.json");
   await copyFile(join(ROOT, "manifest.json"), join(DIST, "manifest.json"));
@@ -293,6 +294,25 @@ async function main() {
   popupHtml = popupHtml.replace(/src="[^"]*main\.tsx"/, 'src="popup.js"');
   await writeFile(join(DIST, "popup", "index.html"), popupHtml);
   await copyFile(join(SRC, "popup", "popup.css"), join(DIST, "popup", "popup.css"));
+
+  console.log("[build] store-overview");
+  await build({
+    entryPoints: [join(SRC, "store-overview", "main.tsx")],
+    bundle: true,
+    minify: IS_PROD,
+    sourcemap: IS_PROD ? false : "inline",
+    target: "chrome116",
+    format: "esm",
+    outfile: join(DIST, "store-overview", "store-overview.js"),
+    jsx: "automatic",
+  });
+  let soHtml = await readFile(join(SRC, "store-overview", "index.html"), "utf8");
+  soHtml = soHtml.replace(/src="[^"]*main\.tsx"/, 'src="store-overview.js"');
+  await writeFile(join(DIST, "store-overview", "index.html"), soHtml);
+  await copyFile(
+    join(SRC, "store-overview", "store-overview.css"),
+    join(DIST, "store-overview", "store-overview.css"),
+  );
 
   console.log("[build] DONE → dist/");
 }

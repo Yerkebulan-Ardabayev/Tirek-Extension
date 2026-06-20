@@ -94,6 +94,30 @@ export function App() {
         Реальная маржа по товару и анти-демпинг прямо на Kaspi
       </div>
 
+      <button
+        onClick={() => {
+          if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+            void chrome.tabs.create({
+              url: chrome.runtime.getURL("store-overview/index.html"),
+            });
+          }
+        }}
+        style={{
+          margin: "0 14px 8px",
+          padding: "8px 12px",
+          width: "calc(100% - 28px)",
+          background: "var(--bg-elev)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          color: "var(--text)",
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        📊 Обзор магазина — все товары сразу
+      </button>
+
       <nav className="tabs">
         {TABS.map((t) => (
           <button

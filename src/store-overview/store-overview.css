@@ -1,0 +1,401 @@
+/*
+ * Стили страницы «Обзор магазина» (фаза 2). Полноэкранная страница расширения,
+ * тёмная тема как у popup (та же палитра brand #a78bfa).
+ */
+
+:root {
+  color-scheme: dark;
+  --bg: #1a1625;
+  --bg-elev: #221d31;
+  --bg-hover: #2a253d;
+  --text: #f5f3ff;
+  --text-muted: #a1a1aa;
+  --border: rgba(167, 139, 250, 0.18);
+  --brand: #a78bfa;
+  --brand-strong: #7c3aed;
+  --success: #10b981;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+
+  /* Сетка таблицы: товар широкий, остальные равные. Делится header и строками. */
+  --cols: minmax(200px, 2.4fr) 1fr 1fr 1fr 1.1fr 1.1fr 0.8fr 1.2fr 1.1fr 0.8fr;
+  --row-h: 44px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Шапка */
+.so-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+.so-header .mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--brand-strong), var(--brand));
+  color: #fff;
+  font-weight: 800;
+}
+.so-header h1 {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0;
+}
+.so-header .alpha-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--warn), #f97316);
+  color: #1a1625;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.so-header .spacer {
+  flex: 1;
+}
+
+/* Панель управления */
+.so-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+.so-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.so-field label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.so-controls input[type="text"],
+.so-controls select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  min-width: 160px;
+}
+.so-controls input[type="text"]:focus,
+.so-controls select:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+.so-checkboxes {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.so-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.btn {
+  background: var(--brand-strong);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:hover {
+  background: var(--brand);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn.secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+/* Карточка ставок */
+.rate-card {
+  margin: 0;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.rate-card summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.rate-card .rates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.rate-card .rate {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.rate-card .rate .rl {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+.rate-card .rate .rv {
+  color: var(--brand);
+}
+.rate-card .rate .meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.rate-card .rate a {
+  color: var(--brand);
+}
+
+/* Баннер устаревания */
+.stale-banner {
+  margin: 0;
+  padding: 10px 20px;
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--warn);
+  font-size: 12px;
+}
+.stale-banner a {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+/* Прогресс */
+.so-progress {
+  padding: 8px 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.so-progress .bar {
+  margin-top: 4px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+.so-progress .bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-strong), var(--brand));
+}
+
+/* CSV drop */
+.csv-drop {
+  margin: 12px 20px;
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.csv-drop.drag {
+  border-color: var(--brand);
+  background: var(--bg-elev);
+}
+
+/* Таблица */
+.so-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 20px 20px;
+}
+.so-thead,
+.so-row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+}
+.so-thead {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  z-index: 2;
+}
+.so-thead button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: right;
+  padding: 10px 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.so-thead button.name {
+  text-align: left;
+}
+.so-thead button.active {
+  color: var(--brand);
+}
+.so-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 320px;
+}
+.so-row {
+  height: var(--row-h);
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.so-row:hover {
+  background: var(--bg-hover);
+}
+.so-row > div {
+  padding: 0 8px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.so-row > .name {
+  text-align: left;
+}
+.so-row .name a {
+  color: var(--text);
+  text-decoration: none;
+}
+.so-row .name a:hover {
+  color: var(--brand);
+}
+.so-bulk {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+.so-bulk input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  width: 130px;
+  text-align: right;
+}
+.so-bulk input:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.so-row .cost-input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  text-align: right;
+  font: inherit;
+  border-radius: 6px;
+  padding: 2px 4px;
+}
+.so-row .cost-input:hover {
+  border-color: var(--border);
+}
+.so-row .cost-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  background: var(--bg);
+}
+
+.dim {
+  color: var(--text-muted);
+}
+.pos {
+  color: var(--success);
+}
+.neg {
+  color: var(--danger);
+}
+.dump {
+  color: var(--danger);
+  font-weight: 700;
+}
+.so-foot {
+  display: grid;
+  grid-template-columns: var(--cols);
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+}
+.so-foot > div {
+  padding: 10px 8px;
+  text-align: right;
+}
+.so-foot > .name {
+  text-align: left;
+}
+
+/* Пустое состояние */
+.so-empty {
+  margin: 40px auto;
+  max-width: 560px;
+  text-align: center;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.so-empty h2 {
+  color: var(--text);
+  font-size: 18px;
+}

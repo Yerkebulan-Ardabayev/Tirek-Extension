@@ -7,6 +7,7 @@
  */
 
 import type { TaxRegime } from "./kz-taxes";
+import type { OrgForm } from "./org-form";
 
 /** Магазин-конкурент, найденный на карточке Kaspi. */
 export type Competitor = {
@@ -99,6 +100,12 @@ export type SellerSettings = {
   myShopId: string | null;
   /** Налоговый режим */
   taxRegime: TaxRegime;
+  /**
+   * Орг-правовая форма (фаза 2 «Обзор магазина»). Надмножество taxRegime:
+   * добавляет «розничный». Если не задана, источник истины — taxRegime
+   * (каждый TaxRegime является валидным OrgForm). См. lib/org-form.ts.
+   */
+  orgForm?: OrgForm;
   /** Включена ли СПП по умолчанию */
   hasSPP: boolean;
   /** Использует ли Kaspi Red */
@@ -155,6 +162,72 @@ export type TelemetryPayload = {
   first_seen: string;
   last_seen: string;
   events_24h: TelemetryCounters;
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Фаза 2 — режим «Обзор магазина» (см. spec.md)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Один товар в листинге магазина (одна строка таблицы обзора). */
+export type StoreProduct = {
+  /** SKU = master-id товара (стабильный ключ, из ссылки /shop/p/...-<id>/). */
+  sku: string;
+  /** Название товара. */
+  name: string;
+  /** Текущая цена селлера, ₸. */
+  price: number;
+  /** Ссылка на карточку. */
+  url: string;
+  /** Категория (текст из листинга/breadcrumbs), если есть. */
+  category?: string | null;
+  /** id категории Kaspi (best-effort маппинг для комиссии), если определён. */
+  categoryId?: string;
+};
+
+/** Результат демпинг-проверки одного SKU (дорогой запрос, кэшируется с TTL). */
+export type StoreDumping = {
+  /** Минимальная цена конкурента, ₸ (null если конкурентов нет). */
+  minCompetitor: number | null;
+  /** Сколько продавцов дешевле моей цены сильнее порога демпинга. */
+  dumpersCount: number;
+  /** Всего продавцов на карточке (включая меня). */
+  competitorsCount: number;
+  /** Когда посчитано (ms). */
+  at: number;
+};
+
+/** Снимок магазина в chrome.storage.local под ключом margli:store:<merchantId>. */
+export type StoreSnapshot = {
+  merchantId: string;
+  /** Имя магазина, если удалось извлечь. */
+  name: string | null;
+  /** Когда собран листинг (ms). */
+  fetchedAt: number;
+  /** Все товары магазина. */
+  products: StoreProduct[];
+  /** Демпинг по SKU (заполняется по приоритету/по требованию, не сразу весь). */
+  dumping: Record<string, StoreDumping>;
+};
+
+/** Фаза текущей загрузки обзора. */
+export type StoreLoadPhase = "idle" | "listing" | "demping" | "done" | "error";
+
+/** Прогресс загрузки обзора (для прогресс-бара и возобновления). */
+export type StoreLoadProgress = {
+  merchantId: string;
+  phase: StoreLoadPhase;
+  /** Сколько товаров уже загружено (цены). */
+  productsLoaded: number;
+  /** Сколько всего товаров (null пока не известно). */
+  productsTotal: number | null;
+  /** Сколько SKU посчитано демпингом. */
+  dempingDone: number;
+  /** Сколько SKU запланировано к демпингу в текущем заходе. */
+  dempingTotal: number;
+  /** Обновлено (ms). */
+  updatedAt: number;
+  /** Текст ошибки, если phase === "error". */
+  error?: string;
 };
 
 /** Сообщение между content/background/popup. */

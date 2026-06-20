@@ -94,7 +94,11 @@
  *     «требует уточнения статьи».
  */
 
-export type TaxRegime = "ip-uproshenka" | "too-uproshenka" | "too-osnovnoy";
+export type TaxRegime =
+  | "ip-uproshenka"
+  | "ip-osnovnoy"
+  | "too-uproshenka"
+  | "too-osnovnoy";
 
 export type TaxRegimeInfo = {
   name: string;
@@ -159,6 +163,19 @@ export const TAX_REGIME_INFO: Record<TaxRegime, TaxRegimeInfo> = {
     vat: "Не платится",
     // НК РК 2026 (Адильет) — налоговый кодекс целиком
     source: NK_RK_2026,
+  },
+  "ip-osnovnoy": {
+    name: "ИП на ОУР (общий режим)",
+    shortName: "ИП-ОУР",
+    rate: "10% ИПН с прибыли + 16% НДС с оборота",
+    threshold: "НДС обязателен при обороте > 10 000 МРП (~43,25 млн ₸/год)",
+    description:
+      "ИП на общеустановленном режиме платит ИПН с прибыли (10% до 8 500 МРП " +
+      "дохода, 15% свыше), а не КПН. С 2026: НДС 16% при обороте > 10 000 МРП. " +
+      "ИПН по двухступенчатой шкале (разъяснение КГД МФ РК).",
+    vat: "16% при обороте > 10 000 МРП (с 2026)",
+    // Разъяснение КГД МФ РК по ИПН и соцналогу 2026 (двухступенчатая шкала)
+    source: KGD_IPN_SN_2026,
   },
   "too-uproshenka": {
     name: "ТОО на упрощёнке",
@@ -400,6 +417,24 @@ export function calculateTax(input: TaxCalculationInput): TaxCalculationResult {
     };
   }
 
+  if (regime === "ip-osnovnoy") {
+    // ИП на ОУР: ИПН с прибыли (а не КПН). Шкала двухступенчатая —
+    // 10% до 8 500 МРП годового дохода, 15% свыше. На одну продажу порог
+    // 8 500 МРП (~36,8 млн ₸) практически недостижим, поэтому в оценке с
+    // операции берём базовую ставку 10%. НДС 16% с оборота как у ОУР
+    // (если ИП — плательщик НДС, оборот > 10 000 МРП).
+    const ipn = profitBeforeTax > 0 ? round2(profitBeforeTax * IPN_RATES.standard) : 0;
+    if (ipn > 0) breakdown.push({ label: "ИПН 10% с прибыли", amount: ipn });
+    const vat = round2(revenue * RATES_2026.vat);
+    breakdown.push({ label: "НДС 16% с оборота", amount: vat });
+    amount = round2(ipn + vat);
+    return {
+      amount,
+      breakdown,
+      effectiveRatePercent: revenue > 0 ? round2((amount / revenue) * 100) : 0,
+    };
+  }
+
   if (regime === "too-osnovnoy") {
     // КПН 20% с прибыли (если прибыль > 0).
     const kpn = profitBeforeTax > 0 ? round2(profitBeforeTax * RATES_2026.kpn) : 0;
@@ -428,6 +463,7 @@ function round2(n: number): number {
 export function getTaxRegimeOptions(): Array<{ value: TaxRegime; label: string }> {
   return [
     { value: "ip-uproshenka", label: TAX_REGIME_INFO["ip-uproshenka"].shortName + " (4%)" },
+    { value: "ip-osnovnoy", label: TAX_REGIME_INFO["ip-osnovnoy"].shortName + " (ИПН 10% + НДС 16%)" },
     { value: "too-uproshenka", label: TAX_REGIME_INFO["too-uproshenka"].shortName + " (4%)" },
     { value: "too-osnovnoy", label: TAX_REGIME_INFO["too-osnovnoy"].shortName + " (КПН 20% + НДС 16%)" },
   ];
