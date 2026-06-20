@@ -87,8 +87,17 @@ async function run(): Promise<void> {
       })
     : Promise.resolve(null);
 
-  const ready = await waitForReady();
-  console.log("[Tirek] DOM ready?", ready);
+  // offer-view API отвечает за 1-2с и НЕ зависит от ленивого DOM Kaspi: таблицу
+  // продавцов Kaspi в DOM не рендерит, поэтому waitForReady() висел все 15с зря,
+  // и бейдж появлялся только через ~15с (юзер не дожидался → «не появляется»).
+  // Ждём API первым: дал офферы — рисуем сразу. Пуст — ждём DOM как fallback.
+  const apiOffers = await offersPromise;
+  if (!apiOffers || apiOffers.length === 0) {
+    const ready = await waitForReady();
+    console.log("[Tirek] offer-view empty, DOM ready?", ready);
+  } else {
+    console.log("[Tirek] competitors from offer-view API:", apiOffers.length);
+  }
 
   // DOM-парс: имя товара, sku, базовая цена + продавцы как fallback. Даже
   // если пусто, overlay покажет жёлтый бейдж, а не умрёт молча.
@@ -97,10 +106,8 @@ async function run(): Promise<void> {
   // API полнее и точнее DOM (все страницы пагинации, чистая числовая цена,
   // без склейки текста доставки и числа отзывов). Если он отдал продавцов,
   // заменяем ими список из DOM.
-  const apiOffers = await offersPromise;
   if (apiOffers && apiOffers.length > 0) {
     snapshot.competitors = apiOffers;
-    console.log("[Tirek] competitors from offer-view API:", apiOffers.length);
   } else {
     console.log("[Tirek] competitors from DOM parse:", snapshot.competitors.length);
   }
