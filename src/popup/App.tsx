@@ -19,7 +19,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "settings", label: "Настройки" },
 ];
 
-const ONBOARDING_SKIP_KEY = "margli:onboarding-skipped";
+const ONBOARDING_SKIP_KEY = "tirek:onboarding-skipped";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("calc");
@@ -54,7 +54,7 @@ export function App() {
         <header className="app-header">
           <div className="logo">
             <span className="mark">M</span>
-            <span>Margli</span>
+            <span>Tirek</span>
             <span className="alpha-pill">ALPHA</span>
           </div>
           <span className="version">v{version}</span>
@@ -81,7 +81,7 @@ export function App() {
       <header className="app-header">
         <div className="logo">
           <span className="mark">M</span>
-          <span>Margli</span>
+          <span>Tirek</span>
           <span className="alpha-pill">ALPHA</span>
         </div>
         <span className="version">v{version}</span>

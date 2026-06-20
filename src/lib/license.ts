@@ -1,5 +1,5 @@
 /**
- * Лицензия и фримиум-лимит Margli + БЕЗОПАСНАЯ офлайн-проверка Pro-кода.
+ * Лицензия и фримиум-лимит Tirek + БЕЗОПАСНАЯ офлайн-проверка Pro-кода.
  *
  * Монетизация:
  *   - Калькулятор реальной маржи — «гвоздь» — бесплатен без лимита.
@@ -33,10 +33,10 @@ export const PRICE_MONTHLY_TENGE = 2990;
  * Альфа: email владельца. Можно заменить на Telegram-канал поддержки.
  */
 export const SUPPORT_CONTACT_URL =
-  "mailto:yerkebulan.ardabayev@gmail.com?subject=Margli%20Pro";
+  "mailto:yerkebulan.ardabayev@gmail.com?subject=Tirek%20Pro";
 
-const LICENSE_KEY = "margli:license";
-const INSTALL_ID_KEY = "margli:installId";
+const LICENSE_KEY = "tirek:license";
+const INSTALL_ID_KEY = "tirek:installId";
 
 export type License = {
   /** Активен ли платный доступ. */
@@ -127,7 +127,11 @@ export type VerifyResult =
  */
 export function isValidProCode(code: string): boolean {
   const parts = code.trim().split(".");
-  return parts.length === 3 && parts[0] === "MARGLI-PRO" && parts[1]!.length > 0 && parts[2]!.length > 0;
+  // Принимаем новый префикс TIREK-PRO и legacy MARGLI-PRO: коды, выданные
+  // тестерам до ребрендинга, остаются валидными (подпись считается над payload,
+  // а не над префиксом).
+  const prefixOk = parts[0] === "TIREK-PRO" || parts[0] === "MARGLI-PRO";
+  return parts.length === 3 && prefixOk && parts[1]!.length > 0 && parts[2]!.length > 0;
 }
 
 /**
@@ -140,7 +144,8 @@ export async function verifySignedCode(
   publicKeyJwk: JsonWebKey,
 ): Promise<VerifyResult> {
   const parts = code.trim().split(".");
-  if (parts.length !== 3 || parts[0] !== "MARGLI-PRO") {
+  // TIREK-PRO (новый) и MARGLI-PRO (legacy до ребрендинга) — оба валидны.
+  if (parts.length !== 3 || (parts[0] !== "TIREK-PRO" && parts[0] !== "MARGLI-PRO")) {
     return { ok: false, error: "Неверный формат кода." };
   }
 

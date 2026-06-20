@@ -2,7 +2,7 @@
  * Стили overlay'а на странице товара Kaspi.kz.
  * Изолируются через Shadow DOM — селекторы Kaspi не могут до них дотянуться.
  *
- * Дизайн повторяет margli-preview (dark theme, brand-300 accent).
+ * Дизайн повторяет tirek-preview (dark theme, brand-300 accent).
  * Палитра: brand-300 = #a78bfa (oklch(0.79 0.108 263) ≈ #a78bfa),
  *          brand-500 ≈ #7c3aed.
  */
@@ -20,7 +20,7 @@
   padding: 0;
 }
 
-.margli-badge {
+.tirek-badge {
   position: fixed;
   right: 20px;
   bottom: 20px;
@@ -43,32 +43,32 @@
   border: 1px solid rgba(167, 139, 250, 0.4);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.margli-badge:hover {
+.tirek-badge:hover {
   transform: translateY(-2px);
   box-shadow:
     0 12px 28px rgba(124, 58, 237, 0.45),
     0 4px 8px rgba(0, 0, 0, 0.25);
 }
-.margli-badge.is-clean {
+.tirek-badge.is-clean {
   background: linear-gradient(135deg, #064e3b 0%, #047857 60%, #10b981 100%);
   border-color: rgba(16, 185, 129, 0.4);
   box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
 }
-.margli-badge.is-warn {
+.tirek-badge.is-warn {
   background: linear-gradient(135deg, #78350f 0%, #b45309 60%, #f59e0b 100%);
   border-color: rgba(245, 158, 11, 0.4);
   box-shadow: 0 8px 24px rgba(245, 158, 11, 0.35);
 }
-.margli-badge.is-info {
+.tirek-badge.is-info {
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #60a5fa 100%);
   border-color: rgba(96, 165, 250, 0.4);
   box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
 }
-.margli-badge .icon {
+.tirek-badge .icon {
   font-size: 16px;
 }
 
-.margli-drawer-backdrop {
+.tirek-drawer-backdrop {
   position: fixed;
   inset: 0;
   z-index: 2147483640;
@@ -76,7 +76,7 @@
   display: none;
   animation: fadein 0.18s ease;
 }
-.margli-drawer-backdrop.is-open {
+.tirek-drawer-backdrop.is-open {
   display: block;
 }
 
@@ -89,7 +89,7 @@
   }
 }
 
-.margli-drawer {
+.tirek-drawer {
   position: fixed;
   right: 0;
   top: 0;
@@ -106,28 +106,28 @@
   flex-direction: column;
   overflow: hidden;
 }
-.margli-drawer.is-open {
+.tirek-drawer.is-open {
   transform: translateX(0);
 }
 
-.margli-drawer__header {
+.tirek-drawer__header {
   padding: 16px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(167, 139, 250, 0.15);
 }
-.margli-drawer__header .title {
+.tirek-drawer__header .title {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.margli-drawer__header .subtitle {
+.tirek-drawer__header .subtitle {
   font-size: 12px;
   color: #a1a1aa;
   margin-top: 2px;
 }
-.margli-drawer__close {
+.tirek-drawer__close {
   background: transparent;
   border: 0;
   color: #d1d5db;
@@ -140,92 +140,92 @@
   align-items: center;
   justify-content: center;
 }
-.margli-drawer__close:hover {
+.tirek-drawer__close:hover {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.margli-drawer__summary {
+.tirek-drawer__summary {
   padding: 16px 20px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.margli-stat {
+.tirek-stat {
   background: rgba(167, 139, 250, 0.07);
   border: 1px solid rgba(167, 139, 250, 0.18);
   border-radius: 12px;
   padding: 12px 14px;
 }
-.margli-stat .label {
+.tirek-stat .label {
   font-size: 11px;
   color: #a1a1aa;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 4px;
 }
-.margli-stat .value {
+.tirek-stat .value {
   font-size: 18px;
   font-weight: 700;
   font-feature-settings: "tnum";
 }
-.margli-stat.is-danger .value {
+.tirek-stat.is-danger .value {
   color: #f87171;
 }
-.margli-stat.is-success .value {
+.tirek-stat.is-success .value {
   color: #34d399;
 }
 
-.margli-drawer__body {
+.tirek-drawer__body {
   flex: 1;
   overflow-y: auto;
   padding: 8px 20px 20px;
 }
 
-.margli-table {
+.tirek-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
-.margli-table th,
-.margli-table td {
+.tirek-table th,
+.tirek-table td {
   text-align: left;
   padding: 10px 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   vertical-align: middle;
 }
-.margli-table th {
+.tirek-table th {
   font-size: 11px;
   font-weight: 600;
   color: #a1a1aa;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.margli-table td.shop {
+.tirek-table td.shop {
   font-weight: 600;
 }
-.margli-table td.price {
+.tirek-table td.price {
   text-align: right;
   font-feature-settings: "tnum";
   font-weight: 700;
 }
-.margli-table td.delta {
+.tirek-table td.delta {
   text-align: right;
   font-feature-settings: "tnum";
   font-weight: 600;
 }
-.margli-table tr.is-mine {
+.tirek-table tr.is-mine {
   background: rgba(167, 139, 250, 0.08);
 }
-.margli-table tr.is-dumper td.delta {
+.tirek-table tr.is-dumper td.delta {
   color: #f87171;
 }
-.margli-table tr.is-cheaper td.delta {
+.tirek-table tr.is-cheaper td.delta {
   color: #fbbf24;
 }
-.margli-table tr.is-pricier td.delta {
+.tirek-table tr.is-pricier td.delta {
   color: #34d399;
 }
-.margli-table .you-tag {
+.tirek-table .you-tag {
   display: inline-block;
   margin-left: 6px;
   background: #a78bfa;
@@ -238,14 +238,14 @@
   letter-spacing: 0.06em;
 }
 
-.margli-drawer__actions {
+.tirek-drawer__actions {
   padding: 14px 20px;
   border-top: 1px solid rgba(167, 139, 250, 0.15);
   display: flex;
   gap: 10px;
   background: rgba(0, 0, 0, 0.2);
 }
-.margli-btn {
+.tirek-btn {
   flex: 1;
   padding: 10px 14px;
   font-family: inherit;
@@ -256,37 +256,37 @@
   border: 0;
   transition: background 0.15s ease, transform 0.1s ease;
 }
-.margli-btn:active {
+.tirek-btn:active {
   transform: translateY(1px);
 }
-.margli-btn--primary {
+.tirek-btn--primary {
   background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
   color: #fff;
 }
-.margli-btn--primary:hover {
+.tirek-btn--primary:hover {
   background: linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%);
 }
-.margli-btn--ghost {
+.tirek-btn--ghost {
   background: rgba(167, 139, 250, 0.12);
   color: #f5f3ff;
   border: 1px solid rgba(167, 139, 250, 0.3);
 }
-.margli-btn--ghost:hover {
+.tirek-btn--ghost:hover {
   background: rgba(167, 139, 250, 0.2);
 }
-.margli-btn:disabled {
+.tirek-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.margli-empty {
+.tirek-empty {
   padding: 24px 16px;
   text-align: center;
   color: #a1a1aa;
   font-size: 13px;
 }
 
-.margli-toast {
+.tirek-toast {
   position: fixed;
   bottom: 80px;
   right: 20px;

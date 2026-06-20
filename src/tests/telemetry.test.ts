@@ -43,7 +43,7 @@ function installChromeMock(): void {
 }
 
 function setSettings(partial: Partial<SellerSettings>): void {
-  store["margli:settings"] = {
+  store["tirek:settings"] = {
     myShopId: "test-shop",
     taxRegime: "ip-uproshenka",
     hasSPP: false,
@@ -98,7 +98,7 @@ describe("getOrCreateTelemetryMeta", () => {
     );
     expect(meta.first_seen).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(meta.last_flush_at).toBe(0);
-    expect(store["margli:telemetry-meta"]).toBeDefined();
+    expect(store["tirek:telemetry-meta"]).toBeDefined();
   });
 
   it("возвращает уже существующую meta без изменений", async () => {

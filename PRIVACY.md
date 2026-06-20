@@ -1,12 +1,12 @@
-# Политика приватности Margli
+# Политика приватности Tirek
 
-Расширение Chrome «Margli — маржа и анти-демпинг Kaspi».
+Расширение Chrome «Tirek — маржа и анти-демпинг Kaspi».
 Дата вступления: 19 июня 2026.
 
 Публичная версия (для ссылки в Chrome Web Store):
-`https://yerkebulan-ardabayev.github.io/Margli-Extension/privacy.html`
+`https://yerkebulan-ardabayev.github.io/Tirek-Extension/privacy.html`
 
-Margli спроектирован приватным по умолчанию: не запрашивает логин и пароль
+Tirek спроектирован приватным по умолчанию: не запрашивает логин и пароль
 Kaspi и не отправляет ваши коммерческие данные на сервер.
 
 ## Что хранится локально (chrome.storage.local, никуда не передаётся)

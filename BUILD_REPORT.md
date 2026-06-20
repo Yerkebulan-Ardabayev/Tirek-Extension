@@ -1,4 +1,4 @@
-# Margli Chrome Extension: BUILD REPORT
+# Tirek Chrome Extension: BUILD REPORT
 
 Версия: 0.1.0-alpha.8 (см. `package.json` и `manifest.json`)
 
@@ -49,12 +49,12 @@ Vitest, **все юнит-тесты проходят** (`pnpm test` / `npm test
 ## 4. Сборка и упаковка
 
 ```bash
-# в папке margli-extension/
+# в папке tirek-extension/
 pnpm install        # установить зависимости
 pnpm test           # vitest, все тесты зелёные
 pnpm typecheck      # tsc --noEmit, 0 ошибок
 pnpm build          # esbuild → dist/
-pnpm package        # build + zip → releases/margli-extension-v<version>.zip
+pnpm package        # build + zip → releases/tirek-extension-v<version>.zip
 ```
 
 (команды доступны и через `npm run <script>`.)
@@ -73,10 +73,10 @@ pnpm package        # build + zip → releases/margli-extension-v<version>.zip
 2. Включить «Режим разработчика» (тумблер справа вверху).
 3. «Загрузить распакованное» (Load Unpacked).
 4. Выбрать папку `dist/`
-   (`C:\Users\yerke\Desktop\Margli\margli-extension\dist\`).
+   (`C:\Users\yerke\Desktop\Tirek\tirek-extension\dist\`).
 
 После изменений в `src/` пересобрать (`pnpm build`) и нажать «Обновить»
-у Margli в `chrome://extensions`.
+у Tirek в `chrome://extensions`.
 
 ## 5. Известные ограничения
 

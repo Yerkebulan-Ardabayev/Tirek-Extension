@@ -1,8 +1,8 @@
 {
-  "name": "margli-extension",
+  "name": "tirek-extension",
   "version": "0.1.0-alpha.10",
   "private": true,
-  "description": "Margli — Kaspi анти-демпинг и калькулятор реальной маржи (Chrome MV3)",
+  "description": "Tirek — Kaspi анти-демпинг и калькулятор реальной маржи (Chrome MV3)",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",

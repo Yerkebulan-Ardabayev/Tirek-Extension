@@ -1,5 +1,5 @@
 /**
- * Упаковывает dist/ в releases/margli-extension-v<version>.zip
+ * Упаковывает dist/ в releases/tirek-extension-v<version>.zip
  * для раздачи тестерам через GitHub Release.
  *
  * Использует встроенный powershell Compress-Archive (Windows) либо системный
@@ -26,7 +26,7 @@ if (!existsSync(DIST)) {
 
 mkdirSync(RELEASES, { recursive: true });
 
-const outFile = join(RELEASES, `margli-extension-v${version}.zip`);
+const outFile = join(RELEASES, `tirek-extension-v${version}.zip`);
 if (existsSync(outFile)) rmSync(outFile);
 
 const isWin = process.platform === "win32";

@@ -133,7 +133,7 @@ export type SellerSettings = {
 
 /**
  * Локальные счётчики событий за текущее окно (≤ 24ч).
- * Хранятся в chrome.storage.local под ключом `margli:telemetry-counters`.
+ * Хранятся в chrome.storage.local под ключом `tirek:telemetry-counters`.
  * Сбрасываются при удачном flush.
  */
 export type TelemetryCounters = {
@@ -150,7 +150,7 @@ export type TelemetryCounters = {
 
 /**
  * Метаданные telemetry — install_id, версия, last_flush.
- * Хранятся в chrome.storage.local под ключом `margli:telemetry-meta`.
+ * Хранятся в chrome.storage.local под ключом `tirek:telemetry-meta`.
  */
 export type TelemetryMeta = {
   /** UUID v4, генерится при первом старте, никогда не меняется. */
@@ -202,7 +202,7 @@ export type StoreDumping = {
   at: number;
 };
 
-/** Снимок магазина в chrome.storage.local под ключом margli:store:<merchantId>. */
+/** Снимок магазина в chrome.storage.local под ключом tirek:store:<merchantId>. */
 export type StoreSnapshot = {
   merchantId: string;
   /** Имя магазина, если удалось извлечь. */

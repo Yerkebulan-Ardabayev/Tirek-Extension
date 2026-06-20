@@ -40,20 +40,20 @@ async function loadFontBase64(): Promise<string | null> {
   if (cachedFontBase64) return cachedFontBase64;
   try {
     if (typeof chrome === "undefined" || !chrome.runtime?.getURL) {
-      console.warn("[Margli/pdf] chrome.runtime недоступен, шрифт не подгружен");
+      console.warn("[Tirek/pdf] chrome.runtime недоступен, шрифт не подгружен");
       return null;
     }
     const url = chrome.runtime.getURL(FONT_PATH);
     const res = await fetch(url);
     if (!res.ok) {
-      console.warn("[Margli/pdf] не удалось загрузить шрифт:", res.status);
+      console.warn("[Tirek/pdf] не удалось загрузить шрифт:", res.status);
       return null;
     }
     const buf = await res.arrayBuffer();
     cachedFontBase64 = arrayBufferToBase64(buf);
     return cachedFontBase64;
   } catch (err) {
-    console.warn("[Margli/pdf] ошибка загрузки шрифта:", err);
+    console.warn("[Tirek/pdf] ошибка загрузки шрифта:", err);
     return null;
   }
 }
@@ -103,7 +103,7 @@ export async function generateDossierPdf(input: DossierInput): Promise<Blob> {
 
   doc.setFont(FONT, "bold");
   doc.setFontSize(18);
-  doc.text("Margli — досье жалобы на демпинг", margin, y);
+  doc.text("Tirek — досье жалобы на демпинг", margin, y);
   y += 22;
 
   doc.setFont(FONT, "normal");
@@ -199,7 +199,7 @@ export async function generateDossierPdf(input: DossierInput): Promise<Blob> {
   y += 16;
   doc.setTextColor(120);
   doc.setFontSize(8);
-  doc.text("Документ подготовлен расширением Margli — Kaspi анти-демпинг.", margin, 800);
+  doc.text("Документ подготовлен расширением Tirek — Kaspi анти-демпинг.", margin, 800);
 
   return doc.output("blob");
 }

@@ -31,7 +31,7 @@ export type StoreTableRow = {
 
 export type BuildRowsInput = {
   snapshot: StoreSnapshot;
-  /** Профили себестоимости по SKU (margli:costs). */
+  /** Профили себестоимости по SKU (tirek:costs). */
   costs: Record<string, SkuCostProfile>;
   /** Орг-форма селлера (определяет налог). */
   orgForm: OrgForm;

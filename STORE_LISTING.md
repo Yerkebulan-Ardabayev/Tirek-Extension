@@ -1,11 +1,11 @@
-# Chrome Web Store — материалы листинга (Margli)
+# Chrome Web Store — материалы листинга (Tirek)
 
 Готовые тексты для подачи в Chrome Web Store Developer Dashboard. Копировать
-по полям. Версия пакета: `releases/margli-extension-v0.1.0-alpha.9.zip`.
+по полям. Версия пакета: `releases/tirek-extension-v0.1.0-alpha.9.zip`.
 
 > Заполнить руками перед подачей (не код):
 > - Реальный контакт поддержки в `src/lib/license.ts` → `SUPPORT_CONTACT_URL`
->   (сейчас заглушка `https://t.me/margli_support`).
+>   (сейчас заглушка `https://t.me/tirek_support`).
 > - Privacy Policy URL (GitHub Pages, см. раздел ниже).
 > - 3-5 скриншотов 1280×800.
 > - $5 developer fee.
@@ -15,7 +15,7 @@
 ## Название (item title)
 
 ```
-Margli — маржа и анти-демпинг Kaspi
+Tirek — маржа и анти-демпинг Kaspi
 ```
 
 ## Краткое описание (summary, ≤132 символа)
@@ -43,7 +43,7 @@ Kaspi 2026, налогов РК и себестоимости) и отслежи
 ## Подробное описание (detailed description)
 
 ```
-Margli — расширение для продавцов Kaspi.kz. Один гвоздь: показать реальную
+Tirek — расширение для продавцов Kaspi.kz. Один гвоздь: показать реальную
 прибыль по товару и поймать тех, кто демпингует вашу карточку. Без Excel, без
 отдельного кабинета, без передачи логина и пароля.
 
@@ -129,17 +129,17 @@ Pro (2990 ₸/мес): безлимит товаров под наблюдени
   открыл калькулятор), страна по заголовкам. Включается только вручную.
 - Контакт для связи.
 
-Пример URL: `https://yerkebulan-ardabayev.github.io/Margli-Extension/privacy.html`
+Пример URL: `https://yerkebulan-ardabayev.github.io/Tirek-Extension/privacy.html`
 
 ---
 
 ## Чек-лист подачи
 
 - [ ] Вписать реальный `SUPPORT_CONTACT_URL` в `src/lib/license.ts`, пересобрать (`npm run package`).
-- [x] Privacy Policy написана: `docs/privacy.html` + `PRIVACY.md`. Осталось: включить GitHub Pages (Settings → Pages → ветка main, папка `/docs`) → URL `https://yerkebulan-ardabayev.github.io/Margli-Extension/privacy.html` → вставить в листинг.
+- [x] Privacy Policy написана: `docs/privacy.html` + `PRIVACY.md`. Осталось: включить GitHub Pages (Settings → Pages → ветка main, папка `/docs`) → URL `https://yerkebulan-ardabayev.github.io/Tirek-Extension/privacy.html` → вставить в листинг.
 - [ ] 3-5 скриншотов 1280×800 (калькулятор маржи, бейдж на карточке, боковая панель с демперами).
 - [ ] Оплатить $5 developer fee.
-- [ ] Загрузить `releases/margli-extension-v0.1.0-alpha.9.zip`.
+- [ ] Загрузить `releases/tirek-extension-v0.1.0-alpha.9.zip`.
 - [ ] Вставить тексты выше, заполнить permissions justification и data usage.
 - [ ] Submit на ревью.
 ```

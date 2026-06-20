@@ -269,7 +269,7 @@ export function Settings() {
             <input
               type="text"
               value={code}
-              placeholder="MARGLI-PRO-XXXX"
+              placeholder="TIREK-PRO-XXXX"
               onChange={(e) => {
                 setCode(e.target.value);
                 setCodeMsg(null);
@@ -298,7 +298,7 @@ export function Settings() {
         {saving ? "Сохраняем…" : savedAt ? "✓ Сохранено" : ""}
       </div>
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-        Margli MVP. Тарифы Kaspi и налоги РК актуальны на 2026 год — проверены через
+        Tirek MVP. Тарифы Kaspi и налоги РК актуальны на 2026 год — проверены через
         официальные источники.
       </div>
     </>

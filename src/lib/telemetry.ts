@@ -46,8 +46,8 @@ import type { TelemetryCounters, TelemetryMeta, TelemetryPayload } from "./types
 import { getSettings } from "./storage";
 
 const KEYS = {
-  meta: "margli:telemetry-meta",
-  counters: "margli:telemetry-counters",
+  meta: "tirek:telemetry-meta",
+  counters: "tirek:telemetry-counters",
 } as const;
 
 /**
@@ -57,7 +57,7 @@ const KEYS = {
  *
  * Когда захотим включить учёт тестеров — впиши сюда URL Google Apps Script
  * Web App (5 минут настройки):
- *   1. Создать пустую Google Sheet «Margli тестеры»
+ *   1. Создать пустую Google Sheet «Tirek тестеры»
  *   2. Расширения → Apps Script → вставить doPost (см. README, раздел
  *      «Включить учёт тестеров»)
  *   3. Deploy → Web app → Execute as «Me» / Access «Anyone» → скопировать URL

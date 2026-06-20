@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Margli — маржа и анти-демпинг Kaspi (ALPHA)",
+  "name": "Tirek — маржа и анти-демпинг Kaspi (ALPHA)",
   "version": "0.1.0",
   "version_name": "0.1.0-alpha.10",
   "description": "Реальная маржа по товару и анти-демпинг для селлеров Kaspi.kz. Альфа для закрытого теста.",
@@ -25,7 +25,7 @@
       "48": "icon-48.png",
       "128": "icon-128.png"
     },
-    "default_title": "Margli"
+    "default_title": "Tirek"
   },
   "icons": {
     "16": "icon-16.png",

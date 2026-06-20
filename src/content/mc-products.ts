@@ -14,10 +14,10 @@ import { calculateMargin } from "../lib/margin-calc";
 import { getAllCostProfiles, getSettings, getWatchlist } from "../lib/storage";
 import { trackEvent } from "../lib/telemetry";
 
-console.log("[Margli] mc content script loaded", location.href);
+console.log("[Tirek] mc content script loaded", location.href);
 
-const BADGE_CLASS = "margli-mc-badge";
-const BANNER_ID = "margli-mc-empty-banner";
+const BADGE_CLASS = "tirek-mc-badge";
+const BANNER_ID = "tirek-mc-empty-banner";
 
 /** Сколько раз попробовать перезапустить парсер если 0 строк (Kaspi подгружает лениво). */
 const MAX_PARSER_ATTEMPTS = 6;
@@ -37,7 +37,7 @@ async function run(): Promise<void> {
 
   if (isProducts) {
     const rows = findProductRows();
-    console.log("[Margli] product rows", rows.length);
+    console.log("[Tirek] product rows", rows.length);
     if (rows.length === 0) {
       onEmpty();
       return;
@@ -100,7 +100,7 @@ async function run(): Promise<void> {
 
   if (isOrders) {
     const rows = findOrderRows();
-    console.log("[Margli] order rows", rows.length);
+    console.log("[Tirek] order rows", rows.length);
     if (rows.length === 0) {
       onEmpty();
       return;
@@ -156,7 +156,7 @@ function showBanner(): void {
     <div style="display:flex;gap:10px;align-items:flex-start">
       <div style="font-size:18px">📋</div>
       <div style="flex:1;line-height:1.4">
-        <div style="font-weight:700;margin-bottom:4px">Margli не распознал таблицу</div>
+        <div style="font-weight:700;margin-bottom:4px">Tirek не распознал таблицу</div>
         <div style="font-size:12px;color:#a1a1aa">
           Парсер не нашёл колонки «Название», «Цена» в DOM этой страницы.
           Бейджи маржи не показаны. Откройте DevTools (F12) и пришлите HTML
@@ -194,7 +194,7 @@ function formatTenge(n: number): string {
 }
 
 function ensureStyles(): void {
-  const id = "margli-mc-styles";
+  const id = "tirek-mc-styles";
   if (document.getElementById(id)) return;
   const s = document.createElement("style");
   s.id = id;
@@ -226,7 +226,7 @@ function debouncedRun(): void {
   const now = Date.now();
   if (now - lastRun < 800) return;
   lastRun = now;
-  run().catch((err) => console.error("[Margli] mc run failed", err));
+  run().catch((err) => console.error("[Tirek] mc run failed", err));
 }
 
 new MutationObserver(debouncedRun).observe(document.body, { childList: true, subtree: true });

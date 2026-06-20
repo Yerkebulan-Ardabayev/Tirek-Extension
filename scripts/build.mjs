@@ -58,7 +58,7 @@ async function ensureIcon(name, sizePx) {
 
 /**
  * Генерирует валидный квадратный PNG заданного размера, заполненный
- * градиентом brand-300 → brand-700 (как в margli-preview).
+ * градиентом brand-300 → brand-700 (как в tirek-preview).
  *
  * Используем pure-JS PNG encoder (ничего лишнего, без зависимостей).
  */

@@ -80,7 +80,7 @@ export function Today() {
       {items.length === 0 && (
         <div className="empty-state">
           <span className="emoji">🛒</span>
-          Откройте товар на kaspi.kz и нажмите ⭐ «Следить» в боковой панели Margli.
+          Откройте товар на kaspi.kz и нажмите ⭐ «Следить» в боковой панели Tirek.
         </div>
       )}
 

@@ -28,7 +28,7 @@ export type OverlayState = {
   isWatched: boolean;
 };
 
-const HOST_ID = "margli-overlay-host";
+const HOST_ID = "tirek-overlay-host";
 
 let mounted = false;
 let drawerOpen = false;
@@ -50,15 +50,15 @@ export function mountOverlay(state: OverlayState, callbacks: OverlayCallbacks): 
 
   const badge = document.createElement("button");
   badge.type = "button";
-  badge.className = "margli-badge";
+  badge.className = "tirek-badge";
   shadow.appendChild(badge);
 
   const backdrop = document.createElement("div");
-  backdrop.className = "margli-drawer-backdrop";
+  backdrop.className = "tirek-drawer-backdrop";
   shadow.appendChild(backdrop);
 
   const drawer = document.createElement("div");
-  drawer.className = "margli-drawer";
+  drawer.className = "tirek-drawer";
   shadow.appendChild(drawer);
 
   badge.addEventListener("click", () => openDrawer(shadow));
@@ -79,8 +79,8 @@ export function unmountOverlay(): void {
 function update(state: OverlayState, callbacks: OverlayCallbacks): void {
   const host = document.getElementById(HOST_ID);
   if (!host?.shadowRoot) return;
-  const badge = host.shadowRoot.querySelector(".margli-badge") as HTMLButtonElement | null;
-  const drawer = host.shadowRoot.querySelector(".margli-drawer") as HTMLElement | null;
+  const badge = host.shadowRoot.querySelector(".tirek-badge") as HTMLButtonElement | null;
+  const drawer = host.shadowRoot.querySelector(".tirek-drawer") as HTMLElement | null;
   if (badge) renderBadge(badge, state);
   if (drawer) renderDrawer(drawer, state, callbacks, host.shadowRoot);
 }
@@ -117,12 +117,12 @@ export function computeBadge(state: OverlayState): BadgeResult {
   //    контракт с content/shop-page.ts, который детектит пустое состояние
   //    по is-warn + regex /не вижу таблицу/i. Не менять.
   if (state.snapshot.competitors.length === 0) {
-    return { kind: "warn", icon: "⚠", text: "Margli: не вижу таблицу продавцов" };
+    return { kind: "warn", icon: "⚠", text: "Tirek: не вижу таблицу продавцов" };
   }
 
   // B) Магазин не указан в настройках — не с чем сравнивать
   if (!state.myShopName) {
-    return { kind: "info", icon: "ℹ", text: "Margli: укажите ваш магазин в настройках" };
+    return { kind: "info", icon: "ℹ", text: "Tirek: укажите ваш магазин в настройках" };
   }
 
   // C) Магазин указан, но его имя не нашлось среди продавцов на карточке.
@@ -131,7 +131,7 @@ export function computeBadge(state: OverlayState): BadgeResult {
     return {
       kind: "info",
       icon: "ℹ",
-      text: `Margli: «${escapeHtml(state.myShopName)}» не найден среди продавцов`,
+      text: `Tirek: «${escapeHtml(state.myShopName)}» не найден среди продавцов`,
     };
   }
 
@@ -145,14 +145,14 @@ export function computeBadge(state: OverlayState): BadgeResult {
 
     // D) Демперов нет и никто не дешевле — настоящее «всё чисто»
     if (cheaperCount === 0) {
-      return { kind: "clean", icon: "✅", text: "Margli: вы дешевле всех" };
+      return { kind: "clean", icon: "✅", text: "Tirek: вы дешевле всех" };
     }
 
     // D2) Демперов нет, но кто-то дешевле — честно, без зелёного «всё чисто»
     return {
       kind: "info",
       icon: "ℹ",
-      text: `Margli: демперов нет, ниже вас: ${cheaperCount}`,
+      text: `Tirek: демперов нет, ниже вас: ${cheaperCount}`,
     };
   }
 
@@ -161,7 +161,7 @@ export function computeBadge(state: OverlayState): BadgeResult {
   return {
     kind: "danger",
     icon: "🛡",
-    text: `Margli: ${dumpers.length} ${plural(dumpers.length, "демпер", "демпера", "демперов")}, ${minDelta.toFixed(1)}%`,
+    text: `Tirek: ${dumpers.length} ${plural(dumpers.length, "демпер", "демпера", "демперов")}, ${minDelta.toFixed(1)}%`,
   };
 }
 
@@ -200,45 +200,45 @@ function renderDrawer(
   const minPrice = sortedCompetitors[0]?.price ?? null;
 
   drawer.innerHTML = `
-    <div class="margli-drawer__header">
+    <div class="tirek-drawer__header">
       <div>
         <div class="title">${escapeHtml(state.snapshot.productName ?? "Товар")}</div>
         <div class="subtitle">${state.snapshot.sku ? "SKU: " + escapeHtml(state.snapshot.sku) : ""}</div>
       </div>
-      <button class="margli-drawer__close" aria-label="Закрыть">✕</button>
+      <button class="tirek-drawer__close" aria-label="Закрыть">✕</button>
     </div>
 
-    <div class="margli-drawer__summary">
-      <div class="margli-stat">
+    <div class="tirek-drawer__summary">
+      <div class="tirek-stat">
         <div class="label">Моя цена</div>
         <div class="value">${state.myPrice != null ? formatTenge(state.myPrice) : "—"}</div>
       </div>
-      <div class="margli-stat">
+      <div class="tirek-stat">
         <div class="label">Мин. на карточке</div>
         <div class="value">${minPrice != null ? formatTenge(minPrice) : "—"}</div>
       </div>
-      <div class="margli-stat ${dumpers.length > 0 ? "is-danger" : "is-success"}">
+      <div class="tirek-stat ${dumpers.length > 0 ? "is-danger" : "is-success"}">
         <div class="label">Демперов</div>
         <div class="value">${dumpers.length}</div>
       </div>
-      <div class="margli-stat">
+      <div class="tirek-stat">
         <div class="label">Всего продавцов</div>
         <div class="value">${state.snapshot.competitors.length}</div>
       </div>
     </div>
 
-    <div class="margli-drawer__body">
+    <div class="tirek-drawer__body">
       ${renderTable(sortedCompetitors, state)}
     </div>
 
-    <div class="margli-drawer__actions">
-      <button class="margli-btn margli-btn--ghost" data-action="watch">
+    <div class="tirek-drawer__actions">
+      <button class="tirek-btn tirek-btn--ghost" data-action="watch">
         ${state.isWatched ? "✓ Под наблюдением" : "⭐ Следить"}
       </button>
     </div>
   `;
 
-  drawer.querySelector(".margli-drawer__close")?.addEventListener("click", () => closeDrawer(shadow));
+  drawer.querySelector(".tirek-drawer__close")?.addEventListener("click", () => closeDrawer(shadow));
 
   const watchBtn = drawer.querySelector("[data-action='watch']") as HTMLButtonElement | null;
   watchBtn?.addEventListener("click", async () => {
@@ -252,7 +252,7 @@ function renderDrawer(
       } else {
         showToast(
           shadow,
-          "Лимит 3 товара на бесплатном тарифе. Откройте Margli → Настройки → Тариф.",
+          "Лимит 3 товара на бесплатном тарифе. Откройте Tirek → Настройки → Тариф.",
         );
       }
     } finally {
@@ -268,7 +268,7 @@ function renderDrawer(
 
 function renderTable(sorted: Competitor[], state: OverlayState): string {
   if (sorted.length === 0) {
-    return `<div class="margli-empty">На этой карточке других продавцов не найдено.</div>`;
+    return `<div class="tirek-empty">На этой карточке других продавцов не найдено.</div>`;
   }
   const rows = sorted
     .map((c) => {
@@ -296,7 +296,7 @@ function renderTable(sorted: Competitor[], state: OverlayState): string {
     })
     .join("");
   return `
-    <table class="margli-table">
+    <table class="tirek-table">
       <thead>
         <tr>
           <th>Магазин</th>
@@ -339,19 +339,19 @@ function deltaPct(price: number, basePrice: number): number {
 
 function openDrawer(shadow: ShadowRoot): void {
   drawerOpen = true;
-  shadow.querySelector(".margli-drawer-backdrop")?.classList.add("is-open");
-  shadow.querySelector(".margli-drawer")?.classList.add("is-open");
+  shadow.querySelector(".tirek-drawer-backdrop")?.classList.add("is-open");
+  shadow.querySelector(".tirek-drawer")?.classList.add("is-open");
 }
 
 function closeDrawer(shadow: ShadowRoot): void {
   drawerOpen = false;
-  shadow.querySelector(".margli-drawer-backdrop")?.classList.remove("is-open");
-  shadow.querySelector(".margli-drawer")?.classList.remove("is-open");
+  shadow.querySelector(".tirek-drawer-backdrop")?.classList.remove("is-open");
+  shadow.querySelector(".tirek-drawer")?.classList.remove("is-open");
 }
 
 function showToast(shadow: ShadowRoot, msg: string): void {
   const t = document.createElement("div");
-  t.className = "margli-toast";
+  t.className = "tirek-toast";
   t.textContent = msg;
   shadow.appendChild(t);
   setTimeout(() => t.remove(), 2200);

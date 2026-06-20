@@ -1,5 +1,5 @@
 /**
- * Выпуск одного Pro-кода Margli (для владельца, после оплаты по Kaspi).
+ * Выпуск одного Pro-кода Tirek (для владельца, после оплаты по Kaspi).
  *
  * Запуск:
  *   node scripts/mint-license.mjs --iid <ID_УСТАНОВКИ> [--days 31]
@@ -11,7 +11,7 @@
  * --days  срок действия в днях (по умолчанию без срока = бессрочный).
  *
  * Приватный ключ берётся из scripts/license-keys/private.jwk
- * (или из переменной окружения MARGLI_LICENSE_PRIVATE_KEY с JWK-строкой).
+ * (или из переменной окружения TIREK_LICENSE_PRIVATE_KEY с JWK-строкой).
  * Печатает готовый код — его отдаём селлеру.
  */
 import { webcrypto as crypto } from "node:crypto";
@@ -37,14 +37,14 @@ if (arg("days") && (!Number.isFinite(days) || days <= 0)) {
   process.exit(1);
 }
 
-let privRaw = process.env.MARGLI_LICENSE_PRIVATE_KEY;
+let privRaw = process.env.TIREK_LICENSE_PRIVATE_KEY;
 if (!privRaw) {
   try {
     privRaw = readFileSync(join(root, "scripts", "license-keys", "private.jwk"), "utf8");
   } catch {
     console.error(
       "Нет приватного ключа. Сначала: node scripts/gen-license-key.mjs " +
-        "(или задай MARGLI_LICENSE_PRIVATE_KEY).",
+        "(или задай TIREK_LICENSE_PRIVATE_KEY).",
     );
     process.exit(1);
   }
@@ -73,7 +73,7 @@ const sig = await crypto.subtle.sign(
 );
 
 const code =
-  "MARGLI-PRO." +
+  "TIREK-PRO." +
   b64urlFromBytes(payloadBytes) +
   "." +
   b64urlFromBytes(new Uint8Array(sig));

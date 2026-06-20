@@ -5,10 +5,10 @@
  * watchlist может разрастись. Локального места — мегабайты.
  *
  * Структура ключей в chrome.storage.local:
- *   margli:settings   → SellerSettings
- *   margli:watchlist  → WatchlistItem[]   (массив, не map — порядок важен для UI)
- *   margli:costs      → Record<sku, SkuCostProfile>
- *   margli:lastSeen   → Record<sku, Competitor[]>  для diff'а в фоне
+ *   tirek:settings   → SellerSettings
+ *   tirek:watchlist  → WatchlistItem[]   (массив, не map — порядок важен для UI)
+ *   tirek:costs      → Record<sku, SkuCostProfile>
+ *   tirek:lastSeen   → Record<sku, Competitor[]>  для diff'а в фоне
  */
 
 import type {
@@ -23,14 +23,14 @@ import type {
 } from "./types";
 
 const KEYS = {
-  settings: "margli:settings",
-  watchlist: "margli:watchlist",
-  costs: "margli:costs",
-  lastSeen: "margli:lastSeen",
-  /** Префикс снимка магазина: margli:store:<merchantId>. */
-  storePrefix: "margli:store:",
+  settings: "tirek:settings",
+  watchlist: "tirek:watchlist",
+  costs: "tirek:costs",
+  lastSeen: "tirek:lastSeen",
+  /** Префикс снимка магазина: tirek:store:<merchantId>. */
+  storePrefix: "tirek:store:",
   /** Прогресс текущей загрузки обзора. */
-  storeProgress: "margli:store:progress",
+  storeProgress: "tirek:store:progress",
 } as const;
 
 /** Ключ снимка конкретного магазина. */
@@ -61,7 +61,7 @@ export const DEFAULT_SETTINGS: SellerSettings = {
   useKaspiRed: false,
   defaultCategoryId: "electronics",
   alertsEnabled: true,
-  // -5% — та же константа, что в margli-preview/app/[locale]/check/page.tsx
+  // -5% — та же константа, что в tirek-preview/app/[locale]/check/page.tsx
   dumpingThresholdPct: -5,
   // Privacy-first: телеметрия выключена по умолчанию, селлер сам включает
   // через onboarding-чекбокс или toggle в Settings.
@@ -199,7 +199,7 @@ export async function getStoreSnapshot(merchantId: string): Promise<StoreSnapsho
 
 /**
  * Все кэшированные снимки магазинов (для выбора последнего открытого в UI).
- * Сканирует ключи margli:store:<id>, исключая служебный margli:store:progress.
+ * Сканирует ключи tirek:store:<id>, исключая служебный tirek:store:progress.
  */
 export async function getAllStoreSnapshots(): Promise<StoreSnapshot[]> {
   if (!isChromeStorageAvailable()) return [];

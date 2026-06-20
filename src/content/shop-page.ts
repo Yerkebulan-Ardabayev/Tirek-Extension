@@ -21,7 +21,7 @@ import { trackError, trackEvent } from "../lib/telemetry";
 import type { Competitor, ShopPageSnapshot, StoreDumping, StoreProduct, WatchlistItem } from "../lib/types";
 import { mountOverlay, type OverlayState } from "./overlay";
 
-console.log("[Margli] shop-page content script loaded", location.href);
+console.log("[Tirek] shop-page content script loaded", location.href);
 
 // --- ожидание готовности DOM Kaspi -----------------------------------------
 
@@ -73,7 +73,7 @@ function waitForReady(): Promise<boolean> {
 // --- main -------------------------------------------------------------------
 
 async function run(): Promise<void> {
-  console.log("[Margli] run() start", location.href);
+  console.log("[Tirek] run() start", location.href);
 
   // Bug 2 fix: тянем ВСЕХ продавцов через offer-view API параллельно с
   // ожиданием DOM. API отдаёт продавцов со ВСЕХ страниц пагинации Kaspi с
@@ -82,13 +82,13 @@ async function run(): Promise<void> {
   const masterId = extractMasterId();
   const offersPromise = masterId
     ? fetchAllOffers(masterId, getKaspiCityId()).catch((err) => {
-        console.warn("[Margli] offer-view API failed, fallback to DOM parse", err);
+        console.warn("[Tirek] offer-view API failed, fallback to DOM parse", err);
         return null;
       })
     : Promise.resolve(null);
 
   const ready = await waitForReady();
-  console.log("[Margli] DOM ready?", ready);
+  console.log("[Tirek] DOM ready?", ready);
 
   // DOM-парс: имя товара, sku, базовая цена + продавцы как fallback. Даже
   // если пусто, overlay покажет жёлтый бейдж, а не умрёт молча.
@@ -100,12 +100,12 @@ async function run(): Promise<void> {
   const apiOffers = await offersPromise;
   if (apiOffers && apiOffers.length > 0) {
     snapshot.competitors = apiOffers;
-    console.log("[Margli] competitors from offer-view API:", apiOffers.length);
+    console.log("[Tirek] competitors from offer-view API:", apiOffers.length);
   } else {
-    console.log("[Margli] competitors from DOM parse:", snapshot.competitors.length);
+    console.log("[Tirek] competitors from DOM parse:", snapshot.competitors.length);
   }
 
-  console.log("[Margli] parsed snapshot", {
+  console.log("[Tirek] parsed snapshot", {
     productName: snapshot.productName,
     sku: snapshot.sku,
     competitors: snapshot.competitors.length,
@@ -127,7 +127,7 @@ async function run(): Promise<void> {
   let myPrice: number | null = null;
   const mine = findMyShop(snapshot.competitors, myShopName);
   if (mine) myPrice = mine.price;
-  console.log("[Margli] myShopName lookup", {
+  console.log("[Tirek] myShopName lookup", {
     needle: myShopName ? normalizeForMatch(myShopName) : null,
     found: mine ?? null,
   });
@@ -143,7 +143,7 @@ async function run(): Promise<void> {
     isWatched,
   };
 
-  console.log("[Margli] mounting overlay", { myPrice, myShopName, isWatched });
+  console.log("[Tirek] mounting overlay", { myPrice, myShopName, isWatched });
   mountOverlay(state, {
     onWatch: async (snap) => addToWatchlistFromSnapshot(snap, myPrice, snap.competitors),
     onDossier: async (snap, dumpers) => {
@@ -154,11 +154,11 @@ async function run(): Promise<void> {
         dumpers,
         generatedAt: Date.now(),
       });
-      const filename = `margli-dossier-${snap.sku ?? "sku"}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `tirek-dossier-${snap.sku ?? "sku"}-${new Date().toISOString().slice(0, 10)}.pdf`;
       downloadBlob(blob, filename);
     },
   });
-  console.log("[Margli] overlay mounted");
+  console.log("[Tirek] overlay mounted");
 
   // Передаём снапшот в background — он обновит lastSeen для diff'а в фоне.
   // Не критично: если background упал, overlay всё равно отрисован.
@@ -169,7 +169,7 @@ async function run(): Promise<void> {
         payload: snapshot,
       });
     } catch (err) {
-      console.warn("[Margli] failed to send snapshot to background", err);
+      console.warn("[Tirek] failed to send snapshot to background", err);
     }
   }
 
@@ -199,9 +199,9 @@ async function run(): Promise<void> {
         at: Date.now(),
       };
       await upsertMyStoreProduct(product, dumping);
-      console.log("[Margli] авто-сбор: товар добавлен в «Мои товары»", product.sku);
+      console.log("[Tirek] авто-сбор: товар добавлен в «Мои товары»", product.sku);
     } catch (err) {
-      console.warn("[Margli] авто-сбор не удался", err);
+      console.warn("[Tirek] авто-сбор не удался", err);
     }
   }
 }
@@ -212,15 +212,15 @@ async function run(): Promise<void> {
  */
 function mountErrorBadge(message: string): void {
   try {
-    const existing = document.getElementById("margli-overlay-host");
+    const existing = document.getElementById("tirek-overlay-host");
     if (existing) existing.remove();
     const host = document.createElement("div");
-    host.id = "margli-overlay-host";
+    host.id = "tirek-overlay-host";
     host.style.cssText = "all:initial;";
     document.body.appendChild(host);
     const shadow = host.attachShadow({ mode: "open" });
     const badge = document.createElement("div");
-    badge.textContent = `Margli: ошибка — ${message}`;
+    badge.textContent = `Tirek: ошибка — ${message}`;
     badge.style.cssText = [
       "position:fixed",
       "right:20px",
@@ -246,7 +246,7 @@ async function addToWatchlistFromSnapshot(
   competitors: Competitor[],
 ): Promise<boolean> {
   if (!snap.sku) {
-    alert("Margli: не удалось определить SKU товара. Попробуйте обновить страницу.");
+    alert("Tirek: не удалось определить SKU товара. Попробуйте обновить страницу.");
     return false;
   }
   const dumpers = competitors.filter((c) => myPrice != null && c.price < myPrice);
@@ -272,7 +272,7 @@ async function addToWatchlistFromSnapshot(
   if (!alreadyWatched) {
     const license = await getLicense();
     if (isWatchlistLimitReached(list.length, license)) {
-      console.log("[Margli] watchlist free limit reached", { count: list.length });
+      console.log("[Tirek] watchlist free limit reached", { count: list.length });
       return false;
     }
   }
@@ -294,15 +294,15 @@ async function runAndRecord(): Promise<void> {
   await run();
   // Считываем состояние сразу из бейджа — он отражает что увидел парсер
   // (см. renderBadge в overlay.ts). Это проще чем экспортировать state.
-  const host = document.getElementById("margli-overlay-host");
-  const badge = host?.shadowRoot?.querySelector(".margli-badge");
+  const host = document.getElementById("tirek-overlay-host");
+  const badge = host?.shadowRoot?.querySelector(".tirek-badge");
   lastSnapshotEmpty = !!badge?.classList.contains("is-warn") &&
     /не вижу таблицу/i.test(badge?.textContent ?? "");
 }
 
 // Запуск (после document_idle уже точно загружено базовое DOM-дерево)
 runAndRecord().catch((err) => {
-  console.error("[Margli] shop-page run() failed", err);
+  console.error("[Tirek] shop-page run() failed", err);
   mountErrorBadge(String(err?.message ?? err));
 });
 
@@ -330,10 +330,10 @@ const lazyPollTimer = setInterval(() => {
     clearInterval(lazyPollTimer);
     lazyRetries += 1;
     console.log(
-      `[Margli] lazy poll detected sellers-table, re-running (try ${lazyRetries}/${LAZY_RETRY_MAX})`,
+      `[Tirek] lazy poll detected sellers-table, re-running (try ${lazyRetries}/${LAZY_RETRY_MAX})`,
     );
     runAndRecord().catch((err) => {
-      console.error("[Margli] lazy poll re-run failed", err);
+      console.error("[Tirek] lazy poll re-run failed", err);
     });
   }
 }, LAZY_POLL_INTERVAL_MS);
@@ -354,11 +354,11 @@ new MutationObserver(() => {
   if (location.href !== lastUrl) {
     lastUrl = location.href;
     if (/\/shop\/p\//.test(location.pathname)) {
-      console.log("[Margli] URL changed, re-running");
+      console.log("[Tirek] URL changed, re-running");
       lazyRetries = 0;
       lastSnapshotEmpty = false;
       runAndRecord().catch((err) => {
-        console.error("[Margli] re-run failed", err);
+        console.error("[Tirek] re-run failed", err);
         mountErrorBadge(String(err?.message ?? err));
       });
     }
@@ -377,9 +377,9 @@ new MutationObserver(() => {
       lazyRetryTimer = setTimeout(() => {
         lazyRetryTimer = null;
         lazyRetries += 1;
-        console.log(`[Margli] lazy sellers-table detected, re-running (try ${lazyRetries}/${LAZY_RETRY_MAX})`);
+        console.log(`[Tirek] lazy sellers-table detected, re-running (try ${lazyRetries}/${LAZY_RETRY_MAX})`);
         runAndRecord().catch((err) => {
-          console.error("[Margli] lazy re-run failed", err);
+          console.error("[Tirek] lazy re-run failed", err);
         });
       }, 500);
     }

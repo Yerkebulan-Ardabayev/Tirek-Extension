@@ -32,8 +32,8 @@ import type { Competitor, ExtensionMessage, ShopPageSnapshot, WatchlistItem } fr
 // Имя alarm'а старого фонового recheck (alpha.7). Сам recheck удалён,
 // но имя нужно для одноразовой очистки alarm'а у тех, кто обновляется
 // с alpha.7 (см. onInstalled).
-const ALARM_NAME = "margli:recheck";
-const TELEMETRY_ALARM_NAME = "margli:telemetry-flush";
+const ALARM_NAME = "tirek:recheck";
+const TELEMETRY_ALARM_NAME = "tirek:telemetry-flush";
 const TELEMETRY_PERIOD_MIN = 24 * 60; // 1 раз в сутки
 
 /**
@@ -44,13 +44,18 @@ const TELEMETRY_PERIOD_MIN = 24 * 60; // 1 раз в сутки
  * ошибочно сохранял число отзывов как цену — это сидит в lastSeen).
  *
  * v1 (изначально): без миграций.
- * v2 (2026-05-28): wipe `margli:lastSeen` — у альфа-тестеров и автора там
+ * v2 (2026-05-28): wipe `tirek:lastSeen` — у альфа-тестеров и автора там
  * исторические цены вида 3030/11571₸ от старого бага парсера, который брал
  * максимум числа из строки tr и захватывал число отзывов. Теперь парсер
  * пофиксен (фильтр + sanity-граница), но кэш остался.
+ * v3 (ребрендинг Margli→Tirek): перенос legacy-ключей `margli:*` → `tirek:*`
+ * (см. migrateLegacyNamespace). install_id / лицензия / настройки тестеров
+ * сохраняются — копируем значения на новый namespace и удаляем старый.
  */
-const STORAGE_SCHEMA_VERSION = 2;
-const SCHEMA_KEY = "margli:schemaVersion";
+const STORAGE_SCHEMA_VERSION = 3;
+const SCHEMA_KEY = "tirek:schemaVersion";
+const KEY_PREFIX = "tirek:";
+const LEGACY_KEY_PREFIX = "margli:";
 
 /**
  * Миграция chrome.storage.local при обновлении/установке плагина.
@@ -61,19 +66,42 @@ const SCHEMA_KEY = "margli:schemaVersion";
  *
  * Идемпотентна: если уже на актуальной версии, ничего не делает.
  */
+/**
+ * Одноразовый перенос legacy-namespace `margli:*` → `tirek:*` (ребрендинг).
+ * Идемпотентна: уже перенесённые ключи (newKey существует) не перезатираются,
+ * затем legacy-ключи удаляются. Запускается ДО чтения версии, потому что сама
+ * версия раньше лежала под `margli:schemaVersion` — после переноса она читается
+ * уже из `tirek:schemaVersion`, и старые миграции (например wipe lastSeen) не
+ * повторяются повторно у тех, кто уже был на v2.
+ */
+async function migrateLegacyNamespace(): Promise<void> {
+  const all = await chrome.storage.local.get(null);
+  const legacyKeys = Object.keys(all).filter((k) => k.startsWith(LEGACY_KEY_PREFIX));
+  if (legacyKeys.length === 0) return;
+  const renames: Record<string, unknown> = {};
+  for (const k of legacyKeys) {
+    const newKey = KEY_PREFIX + k.slice(LEGACY_KEY_PREFIX.length);
+    if (!(newKey in all)) renames[newKey] = all[k];
+  }
+  if (Object.keys(renames).length > 0) await chrome.storage.local.set(renames);
+  await chrome.storage.local.remove(legacyKeys);
+  console.log(`[Tirek/bg] migrated ${legacyKeys.length} legacy margli:* keys → tirek:*`);
+}
+
 async function migrateStorageIfNeeded(): Promise<void> {
+  await migrateLegacyNamespace();
   const stored = await chrome.storage.local.get(SCHEMA_KEY);
   const currentVersion: number = Number(stored[SCHEMA_KEY] ?? 0);
   if (currentVersion >= STORAGE_SCHEMA_VERSION) {
     return;
   }
   console.log(
-    `[Margli/bg] migrating storage from v${currentVersion} to v${STORAGE_SCHEMA_VERSION}`,
+    `[Tirek/bg] migrating storage from v${currentVersion} to v${STORAGE_SCHEMA_VERSION}`,
   );
   // v0/v1 → v2: wipe lastSeen (исторический мусор от старого парсера)
   if (currentVersion < 2) {
-    await chrome.storage.local.remove("margli:lastSeen");
-    console.log("[Margli/bg] wiped margli:lastSeen (historical parser bug cleanup)");
+    await chrome.storage.local.remove("tirek:lastSeen");
+    console.log("[Tirek/bg] wiped tirek:lastSeen (historical parser bug cleanup)");
   }
   await chrome.storage.local.set({ [SCHEMA_KEY]: STORAGE_SCHEMA_VERSION });
 }
@@ -81,7 +109,7 @@ async function migrateStorageIfNeeded(): Promise<void> {
 // --- alarms -----------------------------------------------------------------
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log("[Margli/bg] onInstalled", { reason: details.reason, prev: details.previousVersion });
+  console.log("[Tirek/bg] onInstalled", { reason: details.reason, prev: details.previousVersion });
   // Миграция ПЕРЕД остальной инициализацией — иначе alarm может прочесть
   // устаревший lastSeen и снова уведомить о фейковых «демперах».
   await migrateStorageIfNeeded();
@@ -95,23 +123,23 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  console.log("[Margli/bg] onStartup");
+  console.log("[Tirek/bg] onStartup");
   chrome.alarms.create(TELEMETRY_ALARM_NAME, { periodInMinutes: TELEMETRY_PERIOD_MIN });
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === TELEMETRY_ALARM_NAME) {
     const result = await flushTelemetry();
-    console.log("[Margli/bg] telemetry flush", result);
+    console.log("[Tirek/bg] telemetry flush", result);
   }
 });
 
 // --- notifications ----------------------------------------------------------
 
 chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
-  // notificationId форматируем как "margli:dump:<sku>:<shopId>"
+  // notificationId форматируем как "tirek:dump:<sku>:<shopId>"
   const parts = notificationId.split(":");
-  if (parts[0] !== "margli" || parts[1] !== "dump") return;
+  if (parts[0] !== "tirek" || parts[1] !== "dump") return;
   const sku = parts[2];
   const shopId = parts[3];
   if (!sku) return;
@@ -256,13 +284,13 @@ function computeDumpers(
 async function sendDumpNotification(item: WatchlistItem, d: Competitor): Promise<void> {
   const delta =
     item.myPrice > 0 ? (((d.price - item.myPrice) / item.myPrice) * 100).toFixed(1) : "—";
-  const id = `margli:dump:${item.sku}:${d.shopId}`;
+  const id = `tirek:dump:${item.sku}:${d.shopId}`;
   await chrome.notifications.create(id, {
     type: "basic",
     iconUrl: "icon-128.png",
-    title: "🛡 Margli: новый демпер",
+    title: "🛡 Tirek: новый демпер",
     message: `На «${truncate(item.productName, 40)}» появился ${truncate(d.shopName, 30)}, цена ${formatTenge(d.price)} (${delta}%)`,
-    contextMessage: "Margli — Kaspi анти-демпинг",
+    contextMessage: "Tirek — Kaspi анти-демпинг",
     priority: 1,
     buttons: [{ title: "Открыть" }, { title: "Игнорировать" }],
   });
@@ -276,4 +304,4 @@ function formatTenge(n: number): string {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₸";
 }
 
-console.log("[Margli/bg] worker module loaded");
+console.log("[Tirek/bg] worker module loaded");

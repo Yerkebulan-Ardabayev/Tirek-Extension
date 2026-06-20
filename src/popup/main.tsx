@@ -1,5 +1,5 @@
 /**
- * Entry-point popup'а Margli (React 19).
+ * Entry-point popup'а Tirek (React 19).
  */
 
 import { StrictMode } from "react";

@@ -58,18 +58,28 @@ async function genKeys() {
 async function makeCode(priv: CryptoKey, payload: object): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, priv, bytes);
+  return "TIREK-PRO." + bytesToB64url(bytes) + "." + bytesToB64url(new Uint8Array(sig));
+}
+
+// Legacy-код (префикс MARGLI-PRO) — как его выдавали тестерам до ребрендинга.
+async function makeLegacyCode(priv: CryptoKey, payload: object): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, priv, bytes);
   return "MARGLI-PRO." + bytesToB64url(bytes) + "." + bytesToB64url(new Uint8Array(sig));
 }
 
 describe("isValidProCode (структурная проверка)", () => {
-  it("принимает форму MARGLI-PRO.<payload>.<sig>", () => {
+  it("принимает форму TIREK-PRO.<payload>.<sig>", () => {
+    expect(isValidProCode("TIREK-PRO.abc.def")).toBe(true);
+  });
+  it("принимает legacy-форму MARGLI-PRO.<payload>.<sig> (коды до ребрендинга)", () => {
     expect(isValidProCode("MARGLI-PRO.abc.def")).toBe(true);
   });
   it("отклоняет мусор и старый формат", () => {
-    expect(isValidProCode("MARGLI-PRO-AB12")).toBe(false);
+    expect(isValidProCode("TIREK-PRO-AB12")).toBe(false);
     expect(isValidProCode("")).toBe(false);
     expect(isValidProCode("hello")).toBe(false);
-    expect(isValidProCode("MARGLI-PRO..")).toBe(false);
+    expect(isValidProCode("TIREK-PRO..")).toBe(false);
   });
 });
 
@@ -77,6 +87,13 @@ describe("verifySignedCode — криптографическая проверк
   it("валидная подпись без привязки и срока — ok", async () => {
     const { priv, pubJwk } = await genKeys();
     const code = await makeCode(priv, { v: 1, t: "pro" });
+    const res = await verifySignedCode(code, "ЛЮБОЙ", pubJwk);
+    expect(res.ok).toBe(true);
+  });
+
+  it("legacy-код MARGLI-PRO с валидной подписью — ok (backward-compat)", async () => {
+    const { priv, pubJwk } = await genKeys();
+    const code = await makeLegacyCode(priv, { v: 1, t: "pro" });
     const res = await verifySignedCode(code, "ЛЮБОЙ", pubJwk);
     expect(res.ok).toBe(true);
   });
@@ -107,7 +124,7 @@ describe("verifySignedCode — криптографическая проверк
       new TextEncoder().encode(JSON.stringify({ v: 1, t: "pro", iid: "MRG-XXXX-YYYY" })),
     );
     const sigPart = code.split(".")[2];
-    const forged = "MARGLI-PRO." + forgedPayload + "." + sigPart;
+    const forged = "TIREK-PRO." + forgedPayload + "." + sigPart;
     expect((await verifySignedCode(forged, "MRG-XXXX-YYYY", pubJwk)).ok).toBe(false);
   });
 

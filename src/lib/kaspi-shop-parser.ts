@@ -19,7 +19,7 @@ import type { Competitor, ShopPageSnapshot } from "./types";
 const VERBOSE = true;
 
 function log(...args: unknown[]): void {
-  if (VERBOSE) console.log("[Margli/parser]", ...args);
+  if (VERBOSE) console.log("[Tirek/parser]", ...args);
 }
 
 /**

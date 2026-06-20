@@ -43,7 +43,7 @@ export function Onboarding({ onDone, onSkip }: Props) {
           marginBottom: 4,
         }}
       >
-        Добро пожаловать в Margli
+        Добро пожаловать в Tirek
       </div>
       <div
         style={{
@@ -174,7 +174,7 @@ export function Onboarding({ onDone, onSkip }: Props) {
         }}
       >
         Все данные о ценах, маржах и магазинах хранятся локально в вашем Chrome.
-        Margli не требует регистрации и не передаёт коммерческую информацию.
+        Tirek не требует регистрации и не передаёт коммерческую информацию.
       </div>
     </div>
   );

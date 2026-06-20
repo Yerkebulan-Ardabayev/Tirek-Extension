@@ -72,7 +72,7 @@ describe("settings storage", () => {
     expect(s.dumpingThresholdPct).toBe(-5); // дефолт сохранился
   });
 
-  it("dumpingThresholdPct по умолчанию = -5 (как в margli-preview)", () => {
+  it("dumpingThresholdPct по умолчанию = -5 (как в tirek-preview)", () => {
     expect(DEFAULT_SETTINGS.dumpingThresholdPct).toBe(-5);
   });
 });
@@ -194,7 +194,7 @@ describe("store snapshot storage (фаза 2)", () => {
   });
 
   it("storeKey формирует ключ с префиксом и merchantId", () => {
-    expect(storeKey("30386321")).toBe("margli:store:30386321");
+    expect(storeKey("30386321")).toBe("tirek:store:30386321");
   });
 
   it("getStoreSnapshot возвращает null если ничего не сохранено", async () => {
