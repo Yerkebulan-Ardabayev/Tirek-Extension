@@ -17,6 +17,7 @@ import type {
   SkuCostProfile,
   StoreDumping,
   StoreLoadProgress,
+  StoreProduct,
   StoreSnapshot,
   WatchlistItem,
 } from "./types";
@@ -53,6 +54,9 @@ export const DUMPING_TTL_MS = 2 * 60 * 60 * 1000;
 export const DEFAULT_SETTINGS: SellerSettings = {
   myShopId: null,
   taxRegime: "ip-uproshenka",
+  // Базовая ставка упрощёнки 4% (ст. 726 НК РК). Селлер уточняет по региону
+  // (маслихат ±50%: Алматы/Астана 3%, Шымкент 2%, большинство районов 2-3%).
+  uproshenkaRatePercent: 4,
   hasSPP: false,
   useKaspiRed: false,
   defaultCategoryId: "electronics",
@@ -227,6 +231,48 @@ export async function updateStoreDumping(
   if (!snap) return;
   snap.dumping[sku] = result;
   await setStoreSnapshot(snap);
+}
+
+/**
+ * Снимок «Мои товары», который наполняется АВТОМАТИЧЕСКИ, когда селлер
+ * открывает свои карточки на Kaspi (content-script видит цену и конкурентов).
+ * Это и есть «забей цены сам»: ничего вводить не надо, товар подтягивается с карточки.
+ */
+export const MY_STORE_MERCHANT_ID = "__my_store__";
+
+/**
+ * Чистая функция: вставить/обновить ОДИН товар в снимок (для авто-сбора).
+ * Дедуп по sku (свежий товар поднимается наверх), dumping обновляется если задан,
+ * fetchedAt бампается. Если снимка не было — создаёт новый. Тестируется без chrome.
+ */
+export function mergeProductIntoSnapshot(
+  prev: StoreSnapshot | null,
+  product: StoreProduct,
+  dumping: StoreDumping | null,
+  now: number,
+  merchantId: string = MY_STORE_MERCHANT_ID,
+): StoreSnapshot {
+  const base: StoreSnapshot = prev ?? {
+    merchantId,
+    name: "Мои товары (с карточек Kaspi)",
+    fetchedAt: now,
+    products: [],
+    dumping: {},
+  };
+  const products = [product, ...base.products.filter((p) => p.sku !== product.sku)];
+  const dumpingMap = { ...base.dumping };
+  if (dumping) dumpingMap[product.sku] = dumping;
+  return { ...base, merchantId, fetchedAt: now, products, dumping: dumpingMap };
+}
+
+/** Авто-сбор: добавить открытый на Kaspi товар в снимок «Мои товары». */
+export async function upsertMyStoreProduct(
+  product: StoreProduct,
+  dumping: StoreDumping | null,
+): Promise<void> {
+  const prev = await getStoreSnapshot(MY_STORE_MERCHANT_ID);
+  const next = mergeProductIntoSnapshot(prev, product, dumping, Date.now());
+  await setStoreSnapshot(next);
 }
 
 /** Свеж ли снимок листинга (в пределах TTL). */

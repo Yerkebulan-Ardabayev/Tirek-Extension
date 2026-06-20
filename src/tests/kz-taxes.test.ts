@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  IPN_IP_OUR_THRESHOLD_MRP,
   IPN_RATES,
   MRP_2026,
   MZP_2026,
@@ -11,6 +12,7 @@ import {
   VAT_RATES_2026,
   calculateTax,
   getTaxRegimeOptions,
+  resolveUproshenkaRate,
 } from "../lib/kz-taxes";
 
 /**
@@ -76,10 +78,10 @@ describe("RATES_2026 — ключевые ставки", () => {
     expect(RATES_2026.uproshenkaMax).toBeCloseTo(0.06);
   });
 
-  it("СО (соц. отчисления) = 3,5% — НЕ 5% (исправлено в 2026)", () => {
-    expect(RATES_2026.social).toBeCloseTo(0.035);
-    // строгий guard от регрессии: значение 0.05 в 2026 — неверно
-    expect(RATES_2026.social).not.toBeCloseTo(0.05);
+  it("СО (соц. отчисления) = 5% в 2026 (ставка действует с 01.01.2025, ст. 244 Соц. кодекса)", () => {
+    expect(RATES_2026.social).toBeCloseTo(0.05);
+    // строгий guard от регрессии: 3,5% — это переходная норма до 2025, для 2026 неверно
+    expect(RATES_2026.social).not.toBeCloseTo(0.035);
   });
 
   it("социальный налог ОУР = 6%", () => {
@@ -102,12 +104,69 @@ describe("IPN_RATES", () => {
     expect(IPN_RATES.elevated).toBeCloseTo(0.15);
   });
 
-  it("порог 8 500 МРП", () => {
+  it("порог 8 500 МРП — это для зарплат/физлиц (ст. 363 п.1)", () => {
     expect(IPN_RATES.thresholdMRP).toBe(8_500);
   });
 
   it("source указывает на kgd.gov.kz", () => {
     expect(IPN_RATES.source).toMatch(/kgd\.gov\.kz/);
+  });
+
+  it("порог ИПН для ИП на ОУР = 230 000 МРП (ст. 363 п.4), НЕ 8 500", () => {
+    // регресс-гард: путать порог физлиц (8 500) с порогом ИП (230 000) нельзя
+    expect(IPN_IP_OUR_THRESHOLD_MRP).toBe(230_000);
+    expect(IPN_IP_OUR_THRESHOLD_MRP).not.toBe(IPN_RATES.thresholdMRP);
+  });
+});
+
+describe("resolveUproshenkaRate — ставка упрощёнки по региону (ст. 726)", () => {
+  it("пусто/невалид → базовая 4%", () => {
+    expect(resolveUproshenkaRate(undefined)).toBeCloseTo(0.04);
+    expect(resolveUproshenkaRate(0)).toBeCloseTo(0.04);
+    expect(resolveUproshenkaRate(NaN)).toBeCloseTo(0.04);
+  });
+
+  it("валидное значение в диапазоне 2-6% проходит как есть", () => {
+    expect(resolveUproshenkaRate(0.03)).toBeCloseTo(0.03);
+    expect(resolveUproshenkaRate(0.02)).toBeCloseTo(0.02);
+    expect(resolveUproshenkaRate(0.06)).toBeCloseTo(0.06);
+  });
+
+  it("клиппинг в юридический диапазон 2-6% (маслихат ±50%)", () => {
+    expect(resolveUproshenkaRate(0.01)).toBeCloseTo(0.02); // ниже минимума
+    expect(resolveUproshenkaRate(0.10)).toBeCloseTo(0.06); // выше максимума
+  });
+});
+
+describe("calculateTax — региональная ставка упрощёнки", () => {
+  it("Алматы 3%: налог = 3% от оборота (а не плоские 4%)", () => {
+    const r = calculateTax({
+      revenue: 100_000,
+      profitBeforeTax: 30_000,
+      regime: "ip-uproshenka",
+      uproshenkaRate: 0.03,
+    });
+    expect(r.amount).toBe(3000);
+    expect(r.breakdown[0]?.label).toContain("3%");
+  });
+
+  it("Шымкент 2%: вдвое меньше дефолта", () => {
+    const r = calculateTax({
+      revenue: 100_000,
+      profitBeforeTax: 30_000,
+      regime: "too-uproshenka",
+      uproshenkaRate: 0.02,
+    });
+    expect(r.amount).toBe(2000);
+  });
+
+  it("без ставки — обратная совместимость, дефолт 4%", () => {
+    const r = calculateTax({
+      revenue: 100_000,
+      profitBeforeTax: 30_000,
+      regime: "ip-uproshenka",
+    });
+    expect(r.amount).toBe(4000);
   });
 });
 
@@ -124,30 +183,39 @@ describe("VAT_RATES_2026", () => {
     expect(VAT_RATES_2026.medical2027).toBeCloseTo(0.10);
   });
 
-  it("source — kgd.gov.kz", () => {
-    expect(VAT_RATES_2026.source).toMatch(/kgd\.gov\.kz/);
+  it("source — республиканский первоисточник (НК РК на adilet); medicalSource — КГД", () => {
+    expect(isOfficialUrl(VAT_RATES_2026.source)).toBe(true);
+    expect(VAT_RATES_2026.source).toMatch(/adilet\.zan\.kz/);
     expect(VAT_RATES_2026.medicalSource).toMatch(/kgd\.gov\.kz/);
   });
 });
 
 describe("SOCIAL_CONTRIBUTIONS_2026", () => {
-  it("ОПВ — 10% от объекта, минимальная база 50 МЗП", () => {
+  it("ОПВ — 10% от объекта, ВЕРХНИЙ предел 50 МЗП/мес (не «минимальная база»)", () => {
     expect(SOCIAL_CONTRIBUTIONS_2026.opv.rate).toBeCloseTo(0.10);
-    expect(SOCIAL_CONTRIBUTIONS_2026.opv.minBaseInMZP).toBe(50);
+    // 50 МЗП — это МАКСИМУМ объекта в месяц, а не минимум (нижнего для работника нет)
+    expect(SOCIAL_CONTRIBUTIONS_2026.opv.maxBaseInMZP).toBe(50);
     expect(isOfficialUrl(SOCIAL_CONTRIBUTIONS_2026.opv.source)).toBe(true);
   });
 
-  it("СО — 3,5% (не 5%!), минимальная база 7 МЗП", () => {
-    expect(SOCIAL_CONTRIBUTIONS_2026.so.rate).toBeCloseTo(0.035);
-    expect(SOCIAL_CONTRIBUTIONS_2026.so.rate).not.toBeCloseTo(0.05);
-    expect(SOCIAL_CONTRIBUTIONS_2026.so.minBaseInMZP).toBe(7);
+  it("СО — 5% в 2026 (с 01.01.2025, ст. 244 Соц. кодекса), объект 1..7 МЗП/мес", () => {
+    expect(SOCIAL_CONTRIBUTIONS_2026.so.rate).toBeCloseTo(0.05);
+    expect(SOCIAL_CONTRIBUTIONS_2026.so.rate).not.toBeCloseTo(0.035);
+    // минимум 1 МЗП, максимум 7 МЗП (раньше 7 ошибочно звался «minBaseInMZP»)
+    expect(SOCIAL_CONTRIBUTIONS_2026.so.minBaseInMZP).toBe(1);
+    expect(SOCIAL_CONTRIBUTIONS_2026.so.maxBaseInMZP).toBe(7);
     expect(isOfficialUrl(SOCIAL_CONTRIBUTIONS_2026.so.source)).toBe(true);
+    // источник — республиканский (Социальный кодекс на adilet), не региональный ДГД
+    expect(SOCIAL_CONTRIBUTIONS_2026.so.source).toMatch(/adilet\.zan\.kz/);
   });
 
-  it("ВОСМС — 5%, минимальная база 10 МЗП", () => {
-    expect(SOCIAL_CONTRIBUTIONS_2026.vosms.rate).toBeCloseTo(0.05);
-    expect(SOCIAL_CONTRIBUTIONS_2026.vosms.minBaseInMZP).toBe(10);
+  it("ВОСМС: ИП «за себя» 5% (от 1,4 МЗП), удержание с работника 2%, ООСМС работодателя 3%", () => {
+    expect(SOCIAL_CONTRIBUTIONS_2026.vosms.selfRate).toBeCloseTo(0.05);
+    expect(SOCIAL_CONTRIBUTIONS_2026.vosms.selfBaseInMZP).toBeCloseTo(1.4);
+    expect(SOCIAL_CONTRIBUTIONS_2026.vosms.withheldRate).toBeCloseTo(0.02);
+    expect(SOCIAL_CONTRIBUTIONS_2026.oosms.rate).toBeCloseTo(0.03);
     expect(isOfficialUrl(SOCIAL_CONTRIBUTIONS_2026.vosms.source)).toBe(true);
+    expect(isOfficialUrl(SOCIAL_CONTRIBUTIONS_2026.oosms.source)).toBe(true);
   });
 
   it("ОПВР — 3,5% в 2026", () => {

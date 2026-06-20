@@ -48,7 +48,7 @@ describe("buildStoreRows", () => {
     const r1 = rows[0]!;
     expect(r1.hasCost).toBe(true);
     expect(r1.cost).toBe(6_000);
-    expect(r1.calc.netProfit).toBe(2508); // см. store-calc / margin-calc
+    expect(r1.calc.netProfit).toBe(2688); // возвраты по умолчанию 0: 10000−912−6000−400
     expect(r1.calc.remainderBeforeCost).toBe(8688);
     expect(r1.dumping?.dumpersCount).toBe(2);
 
@@ -78,7 +78,7 @@ describe("computeStoreTotals", () => {
     expect(totals.withCostCount).toBe(1);
     expect(totals.totalRevenue).toBe(35_000);
     expect(totals.totalRemainderBeforeCost).toBe(30_408);
-    expect(totals.totalNetProfit).toBe(2508); // только sku1
+    expect(totals.totalNetProfit).toBe(2688); // только sku1 (возвраты 0 по умолчанию)
     expect(totals.dumpedCount).toBe(1); // sku1
     expect(totals.dumpingCheckedCount).toBe(2); // sku1, sku2
   });

@@ -20,6 +20,7 @@
  */
 
 import {
+  IPN_IP_OUR_THRESHOLD_MRP,
   IPN_RATES,
   MRP_2026,
   RATES_2026,
@@ -166,31 +167,42 @@ function formatMln(tenge: number): string {
 
 // --- кирпичики карточки (переиспользуют kz-taxes-источники) ------------------
 
-function entryUproshenka(): RateCardEntry {
+function entryUproshenka(rate: number = RATES_2026.uproshenka): RateCardEntry {
   return {
     key: "uproshenka",
     label: "Налог с дохода (упрощёнка)",
-    value: pct(RATES_2026.uproshenka) + " с оборота",
+    value: pct(rate) + " с оборота",
     group: "income",
     effectiveFrom: EFFECTIVE_FROM_2026,
     verifiedOn: RATES_VERIFIED_ON,
     source: TAX_REGIME_INFO["ip-uproshenka"].source,
     hint:
-      "Лимит дохода до " +
+      "Базовая ставка 4% (ст. 726 НК РК). Маслихат региона может изменить её на ±50% (2–6%): " +
+      "на 2026 Алматы и Астана 3%, Шымкент 2%, большинство районов 2–3%. " +
+      "Уточните ставку своего региона в акимате. Лимит дохода до " +
       UPROSHENKA_INCOME_LIMIT_MRP.toLocaleString("ru-RU") +
-      " МРП в год. Маслихат региона может изменить ставку ±50% (2–6%).",
+      " МРП в год.",
   };
 }
 
 function entryIpn(): RateCardEntry {
   return {
     key: "ipn",
-    label: "ИПН с прибыли",
-    value: pct(IPN_RATES.standard) + " (до " + IPN_RATES.thresholdMRP.toLocaleString("ru-RU") + " МРП), далее " + pct(IPN_RATES.elevated),
+    label: "ИПН с дохода ИП",
+    value:
+      pct(IPN_RATES.standard) +
+      " (до " +
+      IPN_IP_OUR_THRESHOLD_MRP.toLocaleString("ru-RU") +
+      " МРП), далее " +
+      pct(IPN_RATES.elevated),
     group: "income",
     effectiveFrom: EFFECTIVE_FROM_2026,
     verifiedOn: RATES_VERIFIED_ON,
     source: IPN_RATES.source,
+    hint:
+      "Прогрессивная шкала для ИП на ОУР (ст. 363 п.4 НК РК): 10% до " +
+      IPN_IP_OUR_THRESHOLD_MRP.toLocaleString("ru-RU") +
+      " МРП (~995 млн ₸) в год, 15% свыше. Для зарплат работников порог другой: 8 500 МРП (п.1).",
   };
 }
 
@@ -242,12 +254,34 @@ function entryVatExempt(): RateCardEntry {
 function entrySocialTaxOur(): RateCardEntry {
   return {
     key: "social-tax",
-    label: "Социальный налог (ОУР)",
+    label: "Социальный налог (ТОО, ОУР)",
     value: SOCIAL_TAX_OUR_PERCENT + "%",
     group: "income",
     effectiveFrom: EFFECTIVE_FROM_2026,
     verifiedOn: RATES_VERIFIED_ON,
     source: SOCIAL_TAX_OUR_SOURCE,
+    hint:
+      "Ставка 6% к объекту (ст. 557 НК РК, было 11%). С 2026 не уменьшается на сумму СО.",
+  };
+}
+
+/**
+ * Соцналог ИП на ОУР: фиксированная сумма, НЕ 6%.
+ * 2 МРП за себя + 1 МРП за каждого работника (ст. 557 НК РК).
+ */
+function entrySocialTaxIp(): RateCardEntry {
+  return {
+    key: "social-tax-ip",
+    label: "Социальный налог (ИП, ОУР)",
+    value: "2 МРП за себя + 1 МРП за работника",
+    group: "income",
+    effectiveFrom: EFFECTIVE_FROM_2026,
+    verifiedOn: RATES_VERIFIED_ON,
+    source: SOCIAL_TAX_OUR_SOURCE,
+    hint:
+      "ИП на ОУР платит соцналог фикс. суммой: 2 МРП (" +
+      (2 * MRP_2026).toLocaleString("ru-RU") +
+      " ₸) за себя + 1 МРП за каждого работника. С 2026 не уменьшается на СО (ст. 557 НК РК).",
   };
 }
 
@@ -260,7 +294,7 @@ function entryOpv(scope: "self" | "payroll"): RateCardEntry {
     effectiveFrom: EFFECTIVE_FROM_2026,
     verifiedOn: RATES_VERIFIED_ON,
     source: SOCIAL_CONTRIBUTIONS_2026.opv.source,
-    hint: "Минимальная база " + SOCIAL_CONTRIBUTIONS_2026.opv.minBaseInMZP + " МЗП/год.",
+    hint: "Объект не более " + SOCIAL_CONTRIBUTIONS_2026.opv.maxBaseInMZP + " МЗП в месяц (верхний предел).",
   };
 }
 
@@ -273,19 +307,55 @@ function entrySo(scope: "self" | "payroll"): RateCardEntry {
     effectiveFrom: EFFECTIVE_FROM_2026,
     verifiedOn: RATES_VERIFIED_ON,
     source: SOCIAL_CONTRIBUTIONS_2026.so.source,
-    hint: "С 2026 = 3,5% (была 5%). Минимальная база " + SOCIAL_CONTRIBUTIONS_2026.so.minBaseInMZP + " МЗП/год.",
+    hint:
+      "Ставка 5% (ст. 244 Соц. кодекса, с 1 января 2025). Объект от " +
+      SOCIAL_CONTRIBUTIONS_2026.so.minBaseInMZP +
+      " до " +
+      SOCIAL_CONTRIBUTIONS_2026.so.maxBaseInMZP +
+      " МЗП в месяц.",
   };
 }
 
-function entryVosms(scope: "self" | "payroll"): RateCardEntry {
+/** ИП «за себя»: ВОСМС 5% от 1,4 МЗП. */
+function entryVosmsSelf(): RateCardEntry {
+  const base = String(SOCIAL_CONTRIBUTIONS_2026.vosms.selfBaseInMZP).replace(".", ",");
   return {
     key: "vosms",
-    label: scope === "self" ? "ВОСМС (за себя)" : "ВОСМС (за работников)",
-    value: pct(SOCIAL_CONTRIBUTIONS_2026.vosms.rate),
-    group: scope === "self" ? "contribution" : "payroll",
+    label: "ВОСМС (за себя)",
+    value: pct(SOCIAL_CONTRIBUTIONS_2026.vosms.selfRate),
+    group: "contribution",
     effectiveFrom: EFFECTIVE_FROM_2026,
     verifiedOn: RATES_VERIFIED_ON,
     source: SOCIAL_CONTRIBUTIONS_2026.vosms.source,
+    hint: "Для ИП «за себя»: " + pct(SOCIAL_CONTRIBUTIONS_2026.vosms.selfRate) + " от " + base + " МЗП.",
+  };
+}
+
+/** За работника: ВОСМС 2% удерживается из зарплаты работника. */
+function entryVosmsWithheld(): RateCardEntry {
+  return {
+    key: "vosms",
+    label: "ВОСМС (удержание с работника)",
+    value: pct(SOCIAL_CONTRIBUTIONS_2026.vosms.withheldRate),
+    group: "payroll",
+    effectiveFrom: EFFECTIVE_FROM_2026,
+    verifiedOn: RATES_VERIFIED_ON,
+    source: SOCIAL_CONTRIBUTIONS_2026.vosms.source,
+    hint: "Удерживается из зарплаты работника.",
+  };
+}
+
+/** За работника: ООСМС 3% платит работодатель за свой счёт. */
+function entryOosms(): RateCardEntry {
+  return {
+    key: "oosms",
+    label: "ООСМС (работодатель)",
+    value: pct(SOCIAL_CONTRIBUTIONS_2026.oosms.rate),
+    group: "payroll",
+    effectiveFrom: EFFECTIVE_FROM_2026,
+    verifiedOn: RATES_VERIFIED_ON,
+    source: SOCIAL_CONTRIBUTIONS_2026.oosms.source,
+    hint: "Отчисления работодателя за свой счёт (не путать с удержанием 2%).",
   };
 }
 
@@ -308,36 +378,41 @@ function entryOpvr(): RateCardEntry {
  * income/vat — то, что влияет на налог с продажи (показываем как «главное»).
  * contribution/payroll — периодические/зарплатные отчисления (справочно).
  */
-export function getRateCard(form: OrgForm): RateCardEntry[] {
+export function getRateCard(
+  form: OrgForm,
+  uproshenkaRate: number = RATES_2026.uproshenka,
+): RateCardEntry[] {
   switch (form) {
     case "ip-uproshenka":
     case "roznichny":
-      // ИП за себя на упрощёнке: налог 4%, НДС нет, ОПВ/СО/ВОСМС за себя.
+      // ИП за себя на упрощёнке: налог по региону, НДС нет, ОПВ/СО/ВОСМС за себя.
       return [
-        entryUproshenka(),
+        entryUproshenka(uproshenkaRate),
         entryVatExempt(),
         entryOpv("self"),
         entrySo("self"),
-        entryVosms("self"),
+        entryVosmsSelf(),
       ];
     case "ip-osnovnoy":
-      // ИП на ОУР: ИПН с прибыли, НДС с оборота, ОПВ/СО/ВОСМС за себя.
+      // ИП на ОУР: ИПН с дохода, НДС с оборота, соцналог фикс. (2 МРП), ОПВ/СО/ВОСМС за себя.
       return [
         entryIpn(),
         entryVatStandard(),
+        entrySocialTaxIp(),
         entryOpv("self"),
         entrySo("self"),
-        entryVosms("self"),
+        entryVosmsSelf(),
       ];
     case "too-uproshenka":
-      // ТОО упрощёнка: налог 4%, соцналог не платит, НДС нет.
+      // ТОО упрощёнка: налог по региону, соцналог не платит, НДС нет.
       // Отчисления — по работникам (ОПВ/СО/ВОСМС/ОПВР).
       return [
-        entryUproshenka(),
+        entryUproshenka(uproshenkaRate),
         entryVatExempt(),
         entryOpv("payroll"),
         entrySo("payroll"),
-        entryVosms("payroll"),
+        entryVosmsWithheld(),
+        entryOosms(),
         entryOpvr(),
       ];
     case "too-osnovnoy":
@@ -348,7 +423,8 @@ export function getRateCard(form: OrgForm): RateCardEntry[] {
         entrySocialTaxOur(),
         entryOpv("payroll"),
         entrySo("payroll"),
-        entryVosms("payroll"),
+        entryVosmsWithheld(),
+        entryOosms(),
         entryOpvr(),
       ];
   }

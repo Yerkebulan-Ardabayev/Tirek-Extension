@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   DEFAULT_SETTINGS,
   DUMPING_TTL_MS,
+  MY_STORE_MERCHANT_ID,
   STORE_SNAPSHOT_TTL_MS,
   addToWatchlist,
   blacklistShopForSku,
@@ -12,15 +13,17 @@ import {
   getWatchlist,
   isDumpingFresh,
   isSnapshotFresh,
+  mergeProductIntoSnapshot,
   removeFromWatchlist,
   setSettings,
   setStoreProgress,
   setStoreSnapshot,
   storeKey,
   updateStoreDumping,
+  upsertMyStoreProduct,
   updateWatchlistItem,
 } from "../lib/storage";
-import type { StoreSnapshot, WatchlistItem } from "../lib/types";
+import type { StoreDumping, StoreProduct, StoreSnapshot, WatchlistItem } from "../lib/types";
 
 // --- mock chrome.storage.local ---------------------------------------------
 
@@ -71,6 +74,47 @@ describe("settings storage", () => {
 
   it("dumpingThresholdPct по умолчанию = -5 (как в margli-preview)", () => {
     expect(DEFAULT_SETTINGS.dumpingThresholdPct).toBe(-5);
+  });
+});
+
+describe("авто-сбор «Мои товары» (открыл карточку → товар подтянулся)", () => {
+  const prod = (sku: string, price: number): StoreProduct => ({
+    sku,
+    name: "Товар " + sku,
+    price,
+    url: "https://kaspi.kz/shop/p/-" + sku + "/",
+  });
+  const dmp = (n: number): StoreDumping => ({
+    minCompetitor: 100,
+    dumpersCount: n,
+    competitorsCount: 5,
+    at: 0,
+  });
+
+  it("создаёт снимок «Мои товары» из пустоты", () => {
+    const snap = mergeProductIntoSnapshot(null, prod("111", 1000), dmp(2), 1234);
+    expect(snap.merchantId).toBe(MY_STORE_MERCHANT_ID);
+    expect(snap.products).toHaveLength(1);
+    expect(snap.products[0]!.sku).toBe("111");
+    expect(snap.dumping["111"]?.dumpersCount).toBe(2);
+    expect(snap.fetchedAt).toBe(1234);
+  });
+
+  it("дедуп по sku: повторный товар обновляет цену, не дублирует, идёт наверх", () => {
+    const s1 = mergeProductIntoSnapshot(null, prod("111", 1000), null, 1);
+    const s2 = mergeProductIntoSnapshot(s1, prod("222", 2000), null, 2);
+    const s3 = mergeProductIntoSnapshot(s2, prod("111", 1500), null, 3);
+    expect(s3.products).toHaveLength(2);
+    expect(s3.products[0]!.sku).toBe("111"); // свежий наверх
+    expect(s3.products[0]!.price).toBe(1500); // цена обновилась
+  });
+
+  it("upsertMyStoreProduct сохраняет в storage под снимком «Мои товары»", async () => {
+    await upsertMyStoreProduct(prod("111", 1000), dmp(1));
+    await upsertMyStoreProduct(prod("222", 2000), dmp(0));
+    const snap = await getStoreSnapshot(MY_STORE_MERCHANT_ID);
+    expect(snap?.products).toHaveLength(2);
+    expect(snap?.products.map((p) => p.sku).sort()).toEqual(["111", "222"]);
   });
 });
 

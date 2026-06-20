@@ -96,10 +96,15 @@ export function App() {
 
       <button
         onClick={() => {
-          if (typeof chrome !== "undefined" && chrome.tabs?.create) {
-            void chrome.tabs.create({
-              url: chrome.runtime.getURL("store-overview/index.html"),
-            });
+          if (typeof chrome === "undefined") return;
+          const url = chrome.runtime.getURL("store-overview/index.html");
+          // Открываем ОТДЕЛЬНЫМ окном, а не вкладкой: его удобно держать рядом
+          // с Kaspi и закрыть кнопкой «Закрыть», вернувшись к калькулятору
+          // (клик по иконке M). Если windows API нет — fallback на вкладку.
+          if (chrome.windows?.create) {
+            void chrome.windows.create({ url, type: "popup", width: 1200, height: 820 });
+          } else if (chrome.tabs?.create) {
+            void chrome.tabs.create({ url });
           }
         }}
         style={{

@@ -92,7 +92,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  align-items: center;
+  align-items: flex-end;
   padding: 12px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
@@ -109,6 +109,7 @@ body {
   color: var(--text-muted);
 }
 .so-controls input[type="text"],
+.so-controls input[type="number"],
 .so-controls select {
   background: var(--bg);
   color: var(--text);
@@ -118,7 +119,13 @@ body {
   font-size: 13px;
   min-width: 160px;
 }
+/* Поле «Ставка упрощёнки» — узкое, это просто процент. */
+.so-controls input[type="number"] {
+  min-width: 90px;
+  width: 90px;
+}
 .so-controls input[type="text"]:focus,
+.so-controls input[type="number"]:focus,
 .so-controls select:focus {
   outline: none;
   border-color: var(--brand);
@@ -177,6 +184,7 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 8px;
   margin-top: 10px;
+  align-items: start;
 }
 .rate-card .rate {
   background: var(--bg-elev);

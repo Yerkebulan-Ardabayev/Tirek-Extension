@@ -32,6 +32,10 @@ coverage/
 *.pem
 *.key
 
+# License signing keys — ПРИВАТНЫЙ ключ НИКОГДА не коммитить.
+# Публичный ключ живёт в src/lib/license-pubkey.ts (его коммитить можно).
+scripts/license-keys/
+
 # Cache
 .eslintcache
 .cache/

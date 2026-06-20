@@ -10,7 +10,9 @@
     "package": "node scripts/build.mjs --prod && node scripts/package.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "license:keygen": "node scripts/gen-license-key.mjs",
+    "license:mint": "node scripts/mint-license.mjs"
   },
   "dependencies": {
     "jspdf": "^2.5.2",

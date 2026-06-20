@@ -235,9 +235,6 @@ function renderDrawer(
       <button class="margli-btn margli-btn--ghost" data-action="watch">
         ${state.isWatched ? "✓ Под наблюдением" : "⭐ Следить"}
       </button>
-      <button class="margli-btn margli-btn--primary" data-action="dossier" ${dumpers.length === 0 ? "disabled" : ""}>
-        📄 Досье жалобы
-      </button>
     </div>
   `;
 

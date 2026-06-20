@@ -14,10 +14,11 @@ import {
   addToWatchlist,
   getSettings,
   getWatchlist,
+  upsertMyStoreProduct,
 } from "../lib/storage";
 import { getLicense, isWatchlistLimitReached } from "../lib/license";
 import { trackError, trackEvent } from "../lib/telemetry";
-import type { Competitor, ShopPageSnapshot, WatchlistItem } from "../lib/types";
+import type { Competitor, ShopPageSnapshot, StoreDumping, StoreProduct, WatchlistItem } from "../lib/types";
 import { mountOverlay, type OverlayState } from "./overlay";
 
 console.log("[Margli] shop-page content script loaded", location.href);
@@ -169,6 +170,38 @@ async function run(): Promise<void> {
       });
     } catch (err) {
       console.warn("[Margli] failed to send snapshot to background", err);
+    }
+  }
+
+  // Авто-сбор «Мои товары»: если на карточке нашёлся наш магазин (знаем свою
+  // цену), сразу сохраняем товар в снимок «Мои товары». Тогда «Обзор магазина»
+  // наполняется сам, без ручного ввода цен. Не критично — оборачиваем в try.
+  if (snapshot.sku && myPrice != null) {
+    try {
+      const my = myPrice;
+      const prices = snapshot.competitors
+        .map((c) => c.price)
+        .filter((p) => typeof p === "number" && p > 0);
+      const minCompetitor = prices.length > 0 ? Math.min(...prices) : null;
+      const factor = 1 + settings.dumpingThresholdPct / 100;
+      const dumpersCount = prices.filter((p) => p < my * factor).length;
+      const product: StoreProduct = {
+        sku: snapshot.sku,
+        name: snapshot.productName ?? "Без названия",
+        price: my,
+        url: snapshot.url,
+        category: snapshot.category ?? null,
+      };
+      const dumping: StoreDumping = {
+        minCompetitor,
+        dumpersCount,
+        competitorsCount: snapshot.competitors.length,
+        at: Date.now(),
+      };
+      await upsertMyStoreProduct(product, dumping);
+      console.log("[Margli] авто-сбор: товар добавлен в «Мои товары»", product.sku);
+    } catch (err) {
+      console.warn("[Margli] авто-сбор не удался", err);
     }
   }
 }

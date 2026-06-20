@@ -44,10 +44,16 @@ export type MarginInput = {
   deliveryCost?: number;
   /** Реклама на этот SKU, ₸ за единицу. Default 0. */
   adsCost?: number;
-  /** % возвратов (default 3) */
+  /** % возвратов. Default 0 — не выдумываем за селлера, он вводит свой. */
   returnsRatePercent?: number;
   /** Налоговый режим */
   taxRegime: TaxRegime;
+  /**
+   * Ставка упрощёнки (доля, напр. 0.03) с учётом региона/маслихата.
+   * Если не задана — базовая 4% (см. resolveUproshenkaRate). Влияет только
+   * на режимы упрощёнки.
+   */
+  uproshenkaRate?: number;
   /** Включена ли рассрочка Kaspi Red */
   useKaspiRed?: boolean;
   /** Включена ли СПП (скидка постоянного покупателя) */
@@ -130,7 +136,7 @@ export function calculateMargin(input: MarginInput): MarginResult {
   const kaspiCommission = round2((revenue * feePercent) / 100);
 
   // 2. НДС на комиссию Kaspi.
-  //    Стандартная ставка с 2026 — 16% (КГД МФ РК — Павлодар, 03.12.2025).
+  //    Стандартная ставка с 2026 — 16% (НК РК K2500000214, adilet — республиканский).
   //    Для ряда категорий (медицина, лекарства, медизделия) действует
   //    льготная ставка 5% в 2026 г. (10% с 01.01.2027 г.). Если у категории
   //    задан vatRateOverride — используем его. См. KaspiCategory в kaspi-fees.ts.
@@ -160,8 +166,8 @@ export function calculateMargin(input: MarginInput): MarginResult {
   //    Логика: % возвратов × «стоимость возврата». Реальная стоимость возврата
   //    для селлера ≈ закупка (товар возвращается, но selling-cost вычитается
   //    + риск повреждения). Упрощаем: returnsCost = returnsRate × cost.
-  //    Это пессимистичная оценка для калькулятора.
-  const returnsRate = nonNegative(input.returnsRatePercent ?? 3) / 100;
+  //    По умолчанию 0: не подставляем выдуманный процент, селлер вводит свой.
+  const returnsRate = nonNegative(input.returnsRatePercent ?? 0) / 100;
   const cost = nonNegative(input.cost);
   const returnsCost = round2(returnsRate * cost);
 
@@ -184,6 +190,7 @@ export function calculateMargin(input: MarginInput): MarginResult {
     revenue,
     profitBeforeTax,
     regime: input.taxRegime,
+    uproshenkaRate: input.uproshenkaRate,
   });
 
   const netProfit = round2(profitBeforeTax - tax.amount);

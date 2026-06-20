@@ -9,6 +9,7 @@ import {
   SUPPORT_CONTACT_URL,
   activateProCode,
   getLicense,
+  getOrCreateInstallId,
   type License,
 } from "../lib/license";
 
@@ -20,11 +21,14 @@ export function Settings() {
   const [watchCount, setWatchCount] = useState(0);
   const [code, setCode] = useState("");
   const [codeMsg, setCodeMsg] = useState<string | null>(null);
+  const [installId, setInstallId] = useState<string>("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     getSettings().then(setS);
     getLicense().then(setLic);
     getWatchlist().then((w) => setWatchCount(w.length));
+    getOrCreateInstallId().then(setInstallId);
   }, []);
 
   const activate = async () => {
@@ -88,6 +92,27 @@ export function Settings() {
           </a>
         </div>
       </div>
+
+      {(s.taxRegime === "ip-uproshenka" || s.taxRegime === "too-uproshenka") && (
+        <div className="form-row">
+          <label>Ставка упрощёнки, %</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={s.uproshenkaRatePercent ?? 4}
+            onChange={(e) => {
+              const normalized = e.target.value.replace(",", ".").trim();
+              const parsed = Number(normalized);
+              if (Number.isFinite(parsed)) update({ uproshenkaRatePercent: parsed });
+            }}
+          />
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+            Базовая 4% (ст. 726 НК РК). Маслихат региона мог изменить её на ±50% (2-6%):
+            на 2026 Алматы и Астана 3%, Шымкент 2%, большинство районов 2-3%. Уточните
+            ставку своего региона в акимате.
+          </div>
+        </div>
+      )}
 
       <div className="section-title">Категория и наценки</div>
       <div className="form-row">
@@ -201,8 +226,34 @@ export function Settings() {
               marginBottom: 8,
             }}
           >
-            Оплата: Kaspi-перевод {PRICE_MONTHLY_TENGE.toLocaleString("ru-RU")} ₸ →
-            пришлите чек в поддержку → получите код активации.
+            Оплата (вручную): Kaspi-перевод {PRICE_MONTHLY_TENGE.toLocaleString("ru-RU")} ₸,
+            затем пришлите в поддержку чек и ваш ID установки (ниже). В ответ придёт
+            персональный код. Он сработает только на этом устройстве, поэтому им нельзя
+            поделиться.
+          </div>
+          <div className="form-row">
+            <label>Ваш ID установки (приложите к чеку)</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type="text"
+                readOnly
+                value={installId}
+                onFocus={(e) => e.target.select()}
+                style={{ fontFamily: "monospace", flex: 1 }}
+              />
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => {
+                  if (!installId) return;
+                  void navigator.clipboard?.writeText(installId);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1500);
+                }}
+              >
+                {copied ? "✓" : "Копировать"}
+              </button>
+            </div>
           </div>
           <a
             className="btn"

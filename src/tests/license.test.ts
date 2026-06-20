@@ -3,12 +3,15 @@ import {
   FREE_LICENSE,
   FREE_WATCHLIST_LIMIT,
   activateProCode,
+  bytesToB64url,
   deactivatePro,
   getLicense,
+  getOrCreateInstallId,
   isValidProCode,
   isWatchlistLimitReached,
   remainingFreeSlots,
   setLicense,
+  verifySignedCode,
   type License,
 } from "../lib/license";
 
@@ -40,27 +43,94 @@ beforeEach(() => {
   (globalThis as unknown as { chrome: unknown }).chrome = fakeChrome;
 });
 
-describe("isValidProCode", () => {
-  it("принимает канонический формат", () => {
-    expect(isValidProCode("MARGLI-PRO-AB12")).toBe(true);
+// --- помощники: эфемерная пара ключей + сборка кода (повторяет mint-license) --
+
+async function genKeys() {
+  const kp = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  );
+  const pubJwk = (await crypto.subtle.exportKey("jwk", kp.publicKey)) as JsonWebKey;
+  return { priv: kp.privateKey, pubJwk };
+}
+
+async function makeCode(priv: CryptoKey, payload: object): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, priv, bytes);
+  return "MARGLI-PRO." + bytesToB64url(bytes) + "." + bytesToB64url(new Uint8Array(sig));
+}
+
+describe("isValidProCode (структурная проверка)", () => {
+  it("принимает форму MARGLI-PRO.<payload>.<sig>", () => {
+    expect(isValidProCode("MARGLI-PRO.abc.def")).toBe(true);
   });
-  it("игнорирует регистр, пробелы и разделители", () => {
-    expect(isValidProCode("  marglipro ab12 ")).toBe(true);
-    expect(isValidProCode("MARGLIPRO1234")).toBe(true);
-  });
-  it("отклоняет мусор и неполные коды", () => {
+  it("отклоняет мусор и старый формат", () => {
+    expect(isValidProCode("MARGLI-PRO-AB12")).toBe(false);
     expect(isValidProCode("")).toBe(false);
     expect(isValidProCode("hello")).toBe(false);
-    expect(isValidProCode("MARGLI-PRO-")).toBe(false);
-    expect(isValidProCode("1234")).toBe(false);
-    // слишком длинный суффикс
-    expect(isValidProCode("MARGLI-PRO-ABCDEFGHIJK1")).toBe(false);
+    expect(isValidProCode("MARGLI-PRO..")).toBe(false);
+  });
+});
+
+describe("verifySignedCode — криптографическая проверка подписи", () => {
+  it("валидная подпись без привязки и срока — ok", async () => {
+    const { priv, pubJwk } = await genKeys();
+    const code = await makeCode(priv, { v: 1, t: "pro" });
+    const res = await verifySignedCode(code, "ЛЮБОЙ", pubJwk);
+    expect(res.ok).toBe(true);
+  });
+
+  it("привязка к установке: тот же ID — ok, другой — fail", async () => {
+    const { priv, pubJwk } = await genKeys();
+    const code = await makeCode(priv, { v: 1, t: "pro", iid: "MRG-AAAA-BBBB" });
+    expect((await verifySignedCode(code, "MRG-AAAA-BBBB", pubJwk)).ok).toBe(true);
+    const bad = await verifySignedCode(code, "MRG-XXXX-YYYY", pubJwk);
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.error).toContain("установки");
+  });
+
+  it("истёкший срок — fail; действующий — ok", async () => {
+    const { priv, pubJwk } = await genKeys();
+    const expired = await makeCode(priv, { v: 1, t: "pro", exp: Date.now() - 1000 });
+    expect((await verifySignedCode(expired, "X", pubJwk)).ok).toBe(false);
+    const live = await makeCode(priv, { v: 1, t: "pro", exp: Date.now() + 100000 });
+    const res = await verifySignedCode(live, "X", pubJwk);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.expiresAt).toBeTypeOf("number");
+  });
+
+  it("подделка payload (подменили iid, подпись старая) — отклоняется", async () => {
+    const { priv, pubJwk } = await genKeys();
+    const code = await makeCode(priv, { v: 1, t: "pro", iid: "MRG-AAAA-BBBB" });
+    const forgedPayload = bytesToB64url(
+      new TextEncoder().encode(JSON.stringify({ v: 1, t: "pro", iid: "MRG-XXXX-YYYY" })),
+    );
+    const sigPart = code.split(".")[2];
+    const forged = "MARGLI-PRO." + forgedPayload + "." + sigPart;
+    expect((await verifySignedCode(forged, "MRG-XXXX-YYYY", pubJwk)).ok).toBe(false);
+  });
+
+  it("чужой публичный ключ — подпись не сходится", async () => {
+    const a = await genKeys();
+    const b = await genKeys();
+    const code = await makeCode(a.priv, { v: 1, t: "pro" });
+    expect((await verifySignedCode(code, "X", b.pubJwk)).ok).toBe(false);
+  });
+});
+
+describe("getOrCreateInstallId", () => {
+  it("создаёт стабильный ID и переиспользует его", async () => {
+    const a = await getOrCreateInstallId();
+    const b = await getOrCreateInstallId();
+    expect(a).toBe(b);
+    expect(a).toMatch(/^MRG-/);
   });
 });
 
 describe("isWatchlistLimitReached", () => {
   const free = FREE_LICENSE;
-  const pro: License = { pro: true, code: "MARGLI-PRO-AB12", activatedAt: 1 };
+  const pro: License = { pro: true, code: "x", activatedAt: 1, expiresAt: null };
 
   it("free: ниже лимита — можно", () => {
     expect(isWatchlistLimitReached(0, free)).toBe(false);
@@ -84,7 +154,7 @@ describe("remainingFreeSlots", () => {
     expect(remainingFreeSlots(FREE_WATCHLIST_LIMIT + 2, FREE_LICENSE)).toBe(0);
   });
   it("Infinity для pro", () => {
-    const pro: License = { pro: true, code: null, activatedAt: null };
+    const pro: License = { pro: true, code: null, activatedAt: null, expiresAt: null };
     expect(remainingFreeSlots(100, pro)).toBe(Number.POSITIVE_INFINITY);
   });
 });
@@ -94,26 +164,40 @@ describe("getLicense / activateProCode", () => {
     const lic = await getLicense();
     expect(lic.pro).toBe(false);
   });
-  it("валидный код активирует Pro и сохраняется", async () => {
-    const res = await activateProCode("MARGLI-PRO-AB12");
-    expect(res.ok).toBe(true);
-    const lic = await getLicense();
-    expect(lic.pro).toBe(true);
-    expect(lic.code).toBe("MARGLI-PRO-AB12");
-    expect(lic.activatedAt).toBeTypeOf("number");
-  });
-  it("невалидный код не активирует и оставляет free", async () => {
+
+  it("структурно-неверный код не активирует Pro", async () => {
     const res = await activateProCode("nope");
     expect(res.ok).toBe(false);
     expect(res.error).toBeTruthy();
-    const lic = await getLicense();
-    expect(lic.pro).toBe(false);
+    expect((await getLicense()).pro).toBe(false);
   });
+
+  it("код с неверной подписью (под чужим ключом) не активирует Pro", async () => {
+    // подписан эфемерным ключом, а не вшитым → verifyProCode отклонит.
+    const { priv } = await genKeys();
+    const installId = await getOrCreateInstallId();
+    const code = await makeCode(priv, { v: 1, t: "pro", iid: installId });
+    const res = await activateProCode(code);
+    expect(res.ok).toBe(false);
+    expect((await getLicense()).pro).toBe(false);
+  });
+
   it("deactivatePro возвращает к free", async () => {
-    await setLicense({ pro: true, code: "MARGLI-PRO-AB12", activatedAt: 1 });
+    await setLicense({ pro: true, code: "x", activatedAt: 1, expiresAt: null });
     await deactivatePro();
     const lic = await getLicense();
     expect(lic.pro).toBe(false);
     expect(lic.code).toBeNull();
+  });
+});
+
+describe("getLicense — срок действия", () => {
+  it("истёкший Pro считается не-Pro", async () => {
+    await setLicense({ pro: true, code: "x", activatedAt: 1, expiresAt: Date.now() - 1000 });
+    expect((await getLicense()).pro).toBe(false);
+  });
+  it("действующий Pro остаётся Pro", async () => {
+    await setLicense({ pro: true, code: "x", activatedAt: 1, expiresAt: Date.now() + 100000 });
+    expect((await getLicense()).pro).toBe(true);
   });
 });

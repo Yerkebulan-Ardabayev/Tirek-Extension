@@ -44,8 +44,9 @@ export function Today() {
         cost: cost.cost,
         deliveryCost: cost.deliveryCost ?? 0,
         adsCost: cost.adsCost ?? 0,
-        returnsRatePercent: cost.returnsRatePercent ?? 3,
+        returnsRatePercent: cost.returnsRatePercent ?? 0,
         taxRegime: settings.taxRegime,
+        uproshenkaRate: (settings.uproshenkaRatePercent ?? 4) / 100,
         useKaspiRed: settings.useKaspiRed,
         hasSPP: settings.hasSPP,
       });

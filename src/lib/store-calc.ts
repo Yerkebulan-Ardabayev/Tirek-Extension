@@ -28,7 +28,7 @@ import {
   KASPI_VAT_PERCENT_2026,
   getCategoryById,
 } from "./kaspi-fees";
-import { RATES_2026 } from "./kz-taxes";
+import { RATES_2026, resolveUproshenkaRate } from "./kz-taxes";
 import { calculateMargin } from "./margin-calc";
 import { orgFormToTaxRegime, type OrgForm } from "./org-form";
 
@@ -39,6 +39,11 @@ export type StoreRowInput = {
   categoryId: string;
   /** Орг-форма селлера (определяет налог). */
   orgForm: OrgForm;
+  /**
+   * Ставка упрощёнки (доля, напр. 0.03) с учётом региона/маслихата.
+   * Если не задана — базовая 4%. Влияет только на режимы упрощёнки.
+   */
+  uproshenkaRate?: number;
   /** Себестоимость (закупка), ₸. Если не задана — прибыль не считаем. */
   cost?: number;
   /** Доставка до Kaspi, ₸/ед. */
@@ -86,11 +91,12 @@ function nonNegative(n: number | undefined): number {
 }
 
 /** Налог с оборота, не зависящий от себестоимости. */
-function turnoverTaxFor(orgForm: OrgForm, revenue: number): number {
+function turnoverTaxFor(orgForm: OrgForm, revenue: number, uproshenkaRate?: number): number {
   const regime = orgFormToTaxRegime(orgForm);
   if (regime === "ip-uproshenka" || regime === "too-uproshenka") {
-    // Упрощёнка — 4% с оборота.
-    return round2(revenue * RATES_2026.uproshenka);
+    // Упрощёнка — ставка региона (ст. 726, маслихат ±50%). Тот же нормализатор,
+    // что в calculateTax, чтобы остаток и полный расчёт не расходились.
+    return round2(revenue * resolveUproshenkaRate(uproshenkaRate));
   }
   // ОУР (ИП и ТОО) — НДС 16% с оборота. КПН/ИПН с прибыли сюда НЕ входят.
   return round2(revenue * RATES_2026.vat);
@@ -136,7 +142,7 @@ export function calculateStoreRow(input: StoreRowInput): StoreRowCalc {
   const deliveryCost = nonNegative(input.deliveryCost);
   const adsCost = nonNegative(input.adsCost);
 
-  const turnoverTax = turnoverTaxFor(input.orgForm, revenue);
+  const turnoverTax = turnoverTaxFor(input.orgForm, revenue, input.uproshenkaRate);
 
   const remainderBeforeCost = round2(
     revenue - kaspiFeesTotal - deliveryCost - adsCost - turnoverTax,
@@ -169,6 +175,7 @@ export function calculateStoreRow(input: StoreRowInput): StoreRowCalc {
     adsCost,
     returnsRatePercent: input.returnsRatePercent,
     taxRegime: orgFormToTaxRegime(input.orgForm),
+    uproshenkaRate: input.uproshenkaRate,
     useKaspiRed: input.useKaspiRed,
     hasSPP: input.hasSPP,
   });

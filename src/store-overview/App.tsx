@@ -26,6 +26,7 @@ import {
 import { parseCostCsv, parsePastedCostPairs, parseProductsCsv, parseTenge } from "../lib/csv-import";
 import { normalizeManualMerchantId } from "../lib/merchant-resolve";
 import {
+  MY_STORE_MERCHANT_ID,
   getAllCostProfiles,
   getAllStoreSnapshots,
   getSettings,
@@ -33,6 +34,7 @@ import {
   setCostProfile,
   setSettings,
   setStoreSnapshot,
+  storeKey,
   updateStoreDumping,
 } from "../lib/storage";
 import {
@@ -72,6 +74,23 @@ const COLUMNS: Column[] = [
   { key: "margin", label: "Маржа" },
 ];
 
+/** Демо-снимок для кнопки «Показать на примере» (в памяти, не пишется в кэш). */
+const DEMO_MERCHANT_ID = "__demo__";
+const DEMO_SNAPSHOT: StoreSnapshot = {
+  merchantId: DEMO_MERCHANT_ID,
+  name: "Пример (демо-данные)",
+  fetchedAt: 0,
+  products: [
+    { sku: "130772647", name: "Пароочиститель White Wave WH-QX001 белый", price: 12053, url: "https://kaspi.kz/shop/p/-130772647/" },
+    { sku: "104906550", name: "Hoco UA18 чёрный", price: 1998, url: "https://kaspi.kz/shop/p/-104906550/" },
+    { sku: "900000001", name: "Кофемолка DEMO 200 Вт", price: 8990, url: "#" },
+  ],
+  dumping: {
+    "130772647": { minCompetitor: 9899, dumpersCount: 4, competitorsCount: 26, at: 0 },
+    "104906550": { minCompetitor: 1993, dumpersCount: 1, competitorsCount: 7, at: 0 },
+  },
+};
+
 export function App() {
   const [settings, setSettingsState] = useState<SellerSettings | null>(null);
   const [costs, setCosts] = useState<Record<string, SkuCostProfile>>({});
@@ -97,14 +116,35 @@ export function App() {
       const s = await getSettings();
       setSettingsState(s);
       setCosts(await getAllCostProfiles());
-      const snaps = await getAllStoreSnapshots();
-      if (snaps.length > 0) {
-        snaps.sort((a, b) => b.fetchedAt - a.fetchedAt);
-        const latest = snaps[0]!;
-        setSnapshot(latest);
-        setMerchantInput(latest.merchantId);
+      // Приоритет — авто-собранный снимок «Мои товары» (наполняется сам, когда
+      // открываешь свои карточки на Kaspi). Если его нет — последний открытый.
+      const mine = await getStoreSnapshot(MY_STORE_MERCHANT_ID);
+      if (mine && mine.products.length > 0) {
+        setSnapshot(mine);
+      } else {
+        const snaps = await getAllStoreSnapshots();
+        if (snaps.length > 0) {
+          snaps.sort((a, b) => b.fetchedAt - a.fetchedAt);
+          const latest = snaps[0]!;
+          setSnapshot(latest);
+          setMerchantInput(latest.merchantId);
+        }
       }
     })();
+
+    // Живое обновление: пока окно открыто, новые товары с карточек Kaspi
+    // подтягиваются сами (content-script пишет снимок «Мои товары» в storage).
+    const myKey = storeKey(MY_STORE_MERCHANT_ID);
+    function onStorageChange(
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string,
+    ) {
+      if (area === "local" && changes[myKey]?.newValue) {
+        setSnapshot(changes[myKey].newValue as StoreSnapshot);
+      }
+    }
+    chrome.storage?.onChanged?.addListener(onStorageChange);
+    return () => chrome.storage?.onChanged?.removeListener(onStorageChange);
   }, []);
 
   // Высота скролл-области для виртуализации.
@@ -118,6 +158,11 @@ export function App() {
   }, [snapshot]);
 
   const orgForm: OrgForm = settings?.orgForm ?? settings?.taxRegime ?? "ip-uproshenka";
+  const regime = orgFormToTaxRegime(orgForm);
+  const isUproshenka = regime === "ip-uproshenka" || regime === "too-uproshenka";
+  const uproshenkaRatePercent = settings?.uproshenkaRatePercent ?? 4;
+  const uproshenkaRate = uproshenkaRatePercent / 100;
+  const hasProducts = !!snapshot && snapshot.products.length > 0;
 
   const allRows: StoreTableRow[] = useMemo(() => {
     if (!snapshot || !settings) return [];
@@ -125,11 +170,12 @@ export function App() {
       snapshot,
       costs,
       orgForm,
+      uproshenkaRate,
       defaultCategoryId: settings.defaultCategoryId,
       useKaspiRed: settings.useKaspiRed,
       hasSPP: settings.hasSPP,
     });
-  }, [snapshot, settings, costs, orgForm]);
+  }, [snapshot, settings, costs, orgForm, uproshenkaRate]);
 
   const rows = useMemo(
     () => sortRows(filterRows(allRows, filter), sort.key, sort.dir),
@@ -141,10 +187,17 @@ export function App() {
   const visible = rows.slice(range.start, range.end);
 
   const freshness = useMemo(() => checkRatesFreshness(orgForm), [orgForm]);
-  const rateCard = useMemo(() => getRateCard(orgForm), [orgForm]);
+  const rateCard = useMemo(() => getRateCard(orgForm, uproshenkaRate), [orgForm, uproshenkaRate]);
 
   async function onOrgFormChange(next: OrgForm) {
     const updated = await setSettings({ orgForm: next, taxRegime: orgFormToTaxRegime(next) });
+    setSettingsState(updated);
+  }
+
+  async function onUproshenkaRateChange(percent: number) {
+    if (!Number.isFinite(percent)) return;
+    const clamped = Math.min(6, Math.max(2, percent));
+    const updated = await setSettings({ uproshenkaRatePercent: clamped });
     setSettingsState(updated);
   }
 
@@ -153,6 +206,12 @@ export function App() {
     setSort((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" },
     );
+  }
+
+  function loadDemo() {
+    setSnapshot(DEMO_SNAPSHOT);
+    setMerchantInput("");
+    setStatus("Показан пример (демо-данные). Загрузите свои товары файлом или вставкой, чтобы увидеть реальные цифры.");
   }
 
   async function loadFromCache() {
@@ -347,6 +406,14 @@ export function App() {
             {snapshot.name ?? snapshot.merchantId} · {snapshot.products.length} товаров
           </span>
         )}
+        <button
+          className="btn secondary"
+          style={{ marginLeft: 12 }}
+          onClick={() => window.close()}
+          title="Закрыть обзор и вернуться к калькулятору (иконка M)"
+        >
+          ✕ Закрыть
+        </button>
       </header>
 
       <div className="so-controls">
@@ -364,6 +431,25 @@ export function App() {
             ))}
           </select>
         </div>
+
+        {isUproshenka && (
+          <div className="so-field">
+            <label htmlFor="upr-rate">Ставка упрощёнки, %</label>
+            <input
+              id="upr-rate"
+              type="number"
+              min={2}
+              max={6}
+              step={0.5}
+              value={uproshenkaRatePercent}
+              onChange={(e) => {
+                if (e.target.value === "") return;
+                void onUproshenkaRateChange(Number(e.target.value));
+              }}
+              title="Базовая 4%. Маслихат региона мог снизить: Алматы/Астана 3%, Шымкент 2%, большинство районов 2-3%. Уточните в акимате."
+            />
+          </div>
+        )}
 
         <div className="so-field">
           <label htmlFor="merchant">ID магазина / ссылка</label>
@@ -447,6 +533,8 @@ export function App() {
         </div>
       </details>
 
+      {hasProducts && (
+      <>
       <div
         className={"csv-drop" + (csvDrag ? " drag" : "")}
         onDragOver={(e) => {
@@ -470,7 +558,7 @@ export function App() {
         <textarea
           value={pasteText}
           onChange={(e) => setPasteText(e.target.value)}
-          placeholder={"104906550\t1500\n123456789\t450"}
+          placeholder={"104906550; 1500\n123456789; 450"}
           rows={3}
           style={{
             width: "100%",
@@ -490,6 +578,8 @@ export function App() {
           </button>
         </div>
       </div>
+      </>
+      )}
 
       {status && <div className="so-progress">{status}</div>}
 
@@ -581,22 +671,33 @@ export function App() {
         </div>
       ) : (
         <div className="so-empty">
-          <h2>Загрузите список товаров</h2>
+          <h2>Открывайте свои товары на Kaspi, они появятся здесь сами</h2>
           <p>
-            Kaspi не отдаёт каталог магазина публично, поэтому список товаров берём из вашей
-            выгрузки прайс-листа из кабинета продавца. Нужны колонки SKU, название, цена. Дальше
-            плагин сам посчитает комиссию, налог, остаток до закупки и демпинг по каждому товару.
+            <b>Ничего вводить не нужно.</b> Заходите на свои карточки товаров на kaspi.kz (там,
+            где продаёт ваш магазин), и плагин сам подтянет их сюда с ценой, комиссией, налогом,
+            остатком до закупки и демперами. Это окно обновляется на лету.
           </p>
-          <div style={{ margin: "16px 0" }}>
+          <p style={{ fontSize: 12, opacity: 0.7 }}>
+            Чтобы плагин узнавал вашу цену, укажите имя магазина в Настройках (иконка M →
+            Настройки). Если товаров очень много, можно ещё загрузить прайс-лист файлом или
+            вставкой ниже.
+          </p>
+          <div style={{ margin: "16px 0", display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
             <label className="btn" style={{ cursor: "pointer" }}>
               Выбрать файл с товарами
               <input type="file" accept=".csv,text/csv" hidden onChange={onProductsFile} />
             </label>
+            <button className="btn secondary" onClick={loadDemo}>
+              Показать на примере
+            </button>
+          </div>
+          <div style={{ fontSize: 12, marginBottom: 6 }}>
+            Первая строка — шапка: <b>артикул; название; цена</b>. Дальше по товару в строке.
           </div>
           <textarea
             value={productsPaste}
             onChange={(e) => setProductsPaste(e.target.value)}
-            placeholder={"Артикул\tНазвание\tЦена\n104906550\tHoco UA18\t1998"}
+            placeholder={"артикул; название; цена\n130772647; Пароочиститель White Wave; 12053\n104906550; Hoco UA18; 1998"}
             rows={4}
             style={{
               width: "100%",

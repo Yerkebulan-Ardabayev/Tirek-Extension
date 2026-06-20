@@ -24,6 +24,9 @@ const baseInput: MarginInput = {
   categoryId: "electronics", // 7%
   cost: 12000,
   taxRegime: "ip-uproshenka",
+  // Возвраты заданы явно: дефолт теперь 0 (не выдумываем), а эти кейсы
+  // исторически считались при 3%, поэтому фиксируем 3 здесь.
+  returnsRatePercent: 3,
 };
 
 describe("calculateMargin — простые случаи", () => {
@@ -39,7 +42,7 @@ describe("calculateMargin — простые случаи", () => {
     // Без СПП и Kaspi Red
     expect(r.sppCost).toBe(0);
     expect(r.kaspiRedCost).toBe(0);
-    // Default возвраты 3% от закупки 12 000 = 360
+    // Возвраты 3% (заданы в baseInput) от закупки 12 000 = 360
     expect(r.returnsCost).toBe(360);
     // Закупка
     expect(r.cost).toBe(12000);
@@ -60,6 +63,16 @@ describe("calculateMargin — простые случаи", () => {
     // Категория и режим в ответе
     expect(r.categoryUsed.id).toBe("electronics");
     expect(r.regimeUsed).toBe("ip-uproshenka");
+  });
+
+  it("по умолчанию возвраты 0 (не выдумываем процент за селлера)", () => {
+    const r = calculateMargin({
+      price: 25000,
+      categoryId: "electronics",
+      cost: 12000,
+      taxRegime: "ip-uproshenka",
+    });
+    expect(r.returnsCost).toBe(0);
   });
 
   it("Кейс 2: с Kaspi Red рассрочкой (4%)", () => {
@@ -174,21 +187,21 @@ describe("calculateMargin — ОУР с НДС", () => {
     expect(r.kaspiVat).toBe(1600);
     // Эквайринг 1% = 1 000
     expect(r.kaspiPayFee).toBe(1000);
-    // Возвраты 3% от 50 000 = 1 500
-    expect(r.returnsCost).toBe(1500);
+    // Возвраты по умолчанию 0 (не выдумываем процент за селлера)
+    expect(r.returnsCost).toBe(0);
     // Закупка 50 000
 
-    // Прибыль до налога: 100 000 − 10 000 − 1 600 − 1 000 − 1 500 − 50 000 = 35 900
-    expect(r.profitBeforeTax).toBe(35900);
+    // Прибыль до налога: 100 000 − 10 000 − 1 600 − 1 000 − 0 − 50 000 = 37 400
+    expect(r.profitBeforeTax).toBe(37400);
 
-    // Налог: КПН 20% от 35 900 = 7 180 + НДС 16% от 100 000 = 16 000 → 23 180
-    expect(r.taxAmount).toBe(23180);
+    // Налог: КПН 20% от 37 400 = 7 480 + НДС 16% от 100 000 = 16 000 → 23 480
+    expect(r.taxAmount).toBe(23480);
 
-    // Чистая прибыль: 35 900 − 23 180 = 12 720
-    expect(r.netProfit).toBe(12720);
+    // Чистая прибыль: 37 400 − 23 480 = 13 920
+    expect(r.netProfit).toBe(13920);
 
-    // Маржа: 12 720 / 100 000 × 100 = 12.72%
-    expect(r.marginPercent).toBeCloseTo(12.72, 2);
+    // Маржа: 13 920 / 100 000 × 100 = 13.92%
+    expect(r.marginPercent).toBeCloseTo(13.92, 2);
   });
 
   it("Кейс 9: ТОО ОУР с зачётом НДС на комиссию (vatRefundable=true)", () => {
@@ -203,13 +216,13 @@ describe("calculateMargin — ОУР с НДС", () => {
     // НДС на комиссию = 0 (зачёлся)
     expect(r.kaspiVat).toBe(0);
 
-    // Прибыль до налога: 100 000 − 10 000 − 0 − 1 000 − 1 500 − 50 000 = 37 500
-    expect(r.profitBeforeTax).toBe(37500);
+    // Прибыль до налога: 100 000 − 10 000 − 0 − 1 000 − 0 − 50 000 = 39 000
+    expect(r.profitBeforeTax).toBe(39000);
 
-    // Налог: КПН 20% от 37 500 = 7 500 + НДС 16% от 100 000 = 16 000 → 23 500
-    expect(r.taxAmount).toBe(23500);
+    // Налог: КПН 20% от 39 000 = 7 800 + НДС 16% от 100 000 = 16 000 → 23 800
+    expect(r.taxAmount).toBe(23800);
 
-    expect(r.netProfit).toBe(14000);
+    expect(r.netProfit).toBe(15200);
   });
 
   it("Кейс 10: ТОО упрощёнка — та же 4% что у ИП", () => {
@@ -296,17 +309,17 @@ describe("calculateMargin — льготная ставка НДС для апт
 
     // Эквайринг 1% = 100
     expect(r.kaspiPayFee).toBe(100);
-    // Возвраты 3% × 5 000 = 150
-    expect(r.returnsCost).toBe(150);
+    // Возвраты по умолчанию 0
+    expect(r.returnsCost).toBe(0);
 
-    // Прибыль до налога: 10 000 − 640 − 32 − 100 − 150 − 5 000 = 4 078
-    expect(r.profitBeforeTax).toBe(4078);
+    // Прибыль до налога: 10 000 − 640 − 32 − 100 − 0 − 5 000 = 4 228
+    expect(r.profitBeforeTax).toBe(4228);
 
     // Налог упрощёнка 4% × 10 000 = 400
     expect(r.taxAmount).toBe(400);
 
-    // Чистая прибыль: 4 078 − 400 = 3 678
-    expect(r.netProfit).toBe(3678);
+    // Чистая прибыль: 4 228 − 400 = 3 828
+    expect(r.netProfit).toBe(3828);
 
     // В breakdown лейбл НДС упоминает 5%
     const vatLabel = r.breakdown.find((b) => b.label.includes("НДС на комиссию Kaspi"));

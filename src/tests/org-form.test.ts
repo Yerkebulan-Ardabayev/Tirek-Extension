@@ -124,11 +124,22 @@ describe("getRateCard — карточка ставок по форме", () => 
     expect(byKey["opvr"]?.group).toBe("payroll");
   });
 
-  it("СО показывается как 3,5% (а не 5%) — регресс-гард", () => {
+  it("ВОСМС: ИП «за себя» 5%, у ТОО удержание 2% + ООСМС работодателя 3%", () => {
+    const ip = Object.fromEntries(getRateCard("ip-uproshenka").map((e) => [e.key, e]));
+    expect(ip["vosms"]?.value).toBe("5%");
+    expect(ip["oosms"]).toBeUndefined(); // у ИП «за себя» ООСМС нет
+
+    const byKey = Object.fromEntries(getRateCard("too-osnovnoy").map((e) => [e.key, e]));
+    expect(byKey["vosms"]?.value).toBe("2%"); // удержание с работника
+    expect(byKey["oosms"]?.value).toBe("3%"); // отчисления работодателя
+    expect(byKey["oosms"]?.group).toBe("payroll");
+  });
+
+  it("СО показывается как 5% в 2026 (ст. 244 Соц. кодекса, с 01.01.2025) — регресс-гард", () => {
     const card = getRateCard("ip-osnovnoy");
     const so = card.find((e) => e.key === "so");
-    // Точное значение: старая ошибочная «5%» сюда не вернётся.
-    expect(so?.value).toBe("3,5%");
+    // Точное значение: ошибочная «3,5%» (переходная норма до 2025) сюда не вернётся.
+    expect(so?.value).toBe("5%");
   });
 
   it("Розничный карта совпадает с упрощёнкой по ключевым ставкам", () => {
@@ -136,6 +147,33 @@ describe("getRateCard — карточка ставок по форме", () => 
     const byKey = Object.fromEntries(roz.map((e) => [e.key, e]));
     expect(byKey["uproshenka"]?.value).toContain("4%");
     expect(byKey["vat-exempt"]).toBeDefined();
+  });
+
+  it("ставка упрощёнки берётся по региону (ст. 726): 3% вместо дефолта 4%", () => {
+    const byKey = Object.fromEntries(
+      getRateCard("ip-uproshenka", 0.03).map((e) => [e.key, e]),
+    );
+    expect(byKey["uproshenka"]?.value).toContain("3%");
+    expect(byKey["uproshenka"]?.value).not.toContain("4%");
+    // дефолт без аргумента остаётся 4%
+    const def = Object.fromEntries(getRateCard("ip-uproshenka").map((e) => [e.key, e]));
+    expect(def["uproshenka"]?.value).toContain("4%");
+  });
+
+  it("ИП на ОУР: порог ИПН 230 000 МРП (ст. 363 п.4), не 8 500", () => {
+    const byKey = Object.fromEntries(getRateCard("ip-osnovnoy").map((e) => [e.key, e]));
+    const ipn = byKey["ipn"]?.value ?? "";
+    // toLocaleString("ru-RU") разделяет тысячи NBSP — сверяемся той же локалью
+    expect(ipn).toContain((230_000).toLocaleString("ru-RU"));
+    expect(ipn).not.toContain((8_500).toLocaleString("ru-RU"));
+  });
+
+  it("ИП на ОУР: есть строка соцналога (2 МРП за себя, ст. 557)", () => {
+    const byKey = Object.fromEntries(getRateCard("ip-osnovnoy").map((e) => [e.key, e]));
+    expect(byKey["social-tax-ip"]).toBeDefined();
+    expect(byKey["social-tax-ip"]?.value).toContain("2 МРП");
+    // у ИП это фикс. сумма, а не 6% (6% — только у ТОО)
+    expect(byKey["social-tax"]).toBeUndefined();
   });
 });
 

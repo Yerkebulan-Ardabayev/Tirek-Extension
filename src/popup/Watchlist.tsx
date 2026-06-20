@@ -37,7 +37,7 @@ export function Watchlist() {
       cost: profile?.cost ?? 0,
       deliveryCost: profile?.deliveryCost ?? 0,
       adsCost: profile?.adsCost ?? 0,
-      returnsRatePercent: profile?.returnsRatePercent ?? 3,
+      returnsRatePercent: profile?.returnsRatePercent ?? 0,
       categoryId: profile?.categoryId ?? "electronics",
     });
   }, []);
@@ -49,7 +49,7 @@ export function Watchlist() {
       cost: Number(editForm.cost ?? 0),
       deliveryCost: Number(editForm.deliveryCost ?? 0),
       adsCost: Number(editForm.adsCost ?? 0),
-      returnsRatePercent: Number(editForm.returnsRatePercent ?? 3),
+      returnsRatePercent: Number(editForm.returnsRatePercent ?? 0),
       categoryId: editForm.categoryId ?? "electronics",
       updatedAt: Date.now(),
     });
@@ -139,7 +139,7 @@ export function Watchlist() {
                     <label>Возвраты %</label>
                     <input
                       type="number"
-                      value={editForm.returnsRatePercent ?? 3}
+                      value={editForm.returnsRatePercent ?? 0}
                       onChange={(e) =>
                         setEditForm({ ...editForm, returnsRatePercent: Number(e.target.value) })
                       }

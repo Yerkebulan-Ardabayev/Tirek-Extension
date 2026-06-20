@@ -13,6 +13,7 @@ type FormState = {
   adsCost: number;
   returnsRatePercent: number;
   taxRegime: SellerSettings["taxRegime"];
+  uproshenkaRatePercent: number;
   useKaspiRed: boolean;
   hasSPP: boolean;
 };
@@ -24,8 +25,9 @@ export function MarginCalculator() {
     cost: 12000,
     deliveryCost: 0,
     adsCost: 0,
-    returnsRatePercent: 3,
+    returnsRatePercent: 0,
     taxRegime: "ip-uproshenka",
+    uproshenkaRatePercent: 4,
     useKaspiRed: false,
     hasSPP: false,
   });
@@ -38,13 +40,20 @@ export function MarginCalculator() {
         ...f,
         categoryId: f.categoryId === "electronics" ? s.defaultCategoryId : f.categoryId,
         taxRegime: s.taxRegime,
+        uproshenkaRatePercent: s.uproshenkaRatePercent ?? 4,
         useKaspiRed: s.useKaspiRed,
         hasSPP: s.hasSPP,
       }));
     })();
   }, []);
 
-  const result = useMemo(() => calculateMargin(form), [form]);
+  const result = useMemo(() => {
+    const { uproshenkaRatePercent, ...rest } = form;
+    return calculateMargin({ ...rest, uproshenkaRate: uproshenkaRatePercent / 100 });
+  }, [form]);
+
+  const isUproshenka =
+    form.taxRegime === "ip-uproshenka" || form.taxRegime === "too-uproshenka";
 
   const update = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -158,6 +167,22 @@ export function MarginCalculator() {
           ))}
         </select>
       </div>
+
+      {isUproshenka && (
+        <div className="form-row">
+          <label>Ставка упрощёнки %</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={numToDisplay(form.uproshenkaRatePercent)}
+            onChange={(e) => update("uproshenkaRatePercent", parseDecimalInput(e.target.value))}
+          />
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+            Базовая 4%. Маслихат региона мог снизить: Алматы и Астана 3%, Шымкент 2%,
+            большинство районов 2-3%. Уточните ставку своего региона в акимате.
+          </div>
+        </div>
+      )}
 
       <div className="form-row toggle">
         <label htmlFor="kaspiRed">Kaspi Red рассрочка (4%)</label>

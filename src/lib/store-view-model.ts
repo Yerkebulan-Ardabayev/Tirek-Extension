@@ -35,6 +35,11 @@ export type BuildRowsInput = {
   costs: Record<string, SkuCostProfile>;
   /** Орг-форма селлера (определяет налог). */
   orgForm: OrgForm;
+  /**
+   * Ставка упрощёнки (доля, напр. 0.03) с учётом региона/маслихата.
+   * Если не задана — базовая 4%. Влияет только на режимы упрощёнки.
+   */
+  uproshenkaRate?: number;
   /** Категория по умолчанию, если у товара/профиля её нет. */
   defaultCategoryId: string;
   /** Глобальные тогглы из настроек. */
@@ -54,6 +59,7 @@ export function buildStoreRows(input: BuildRowsInput): StoreTableRow[] {
       price: product.price,
       categoryId,
       orgForm,
+      ...(input.uproshenkaRate !== undefined ? { uproshenkaRate: input.uproshenkaRate } : {}),
       ...(hasCost ? { cost: profile!.cost } : {}),
       ...(profile?.deliveryCost !== undefined ? { deliveryCost: profile.deliveryCost } : {}),
       ...(profile?.adsCost !== undefined ? { adsCost: profile.adsCost } : {}),
