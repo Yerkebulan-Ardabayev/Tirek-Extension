@@ -120,7 +120,7 @@ export function App() {
           cursor: "pointer",
         }}
       >
-        📊 Обзор магазина — все товары сразу
+        📊 Обзор магазина: все товары сразу
       </button>
 
       <nav className="tabs">

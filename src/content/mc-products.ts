@@ -67,11 +67,14 @@ async function run(): Promise<void> {
           useKaspiRed: settings.useKaspiRed,
           hasSPP: settings.hasSPP,
         });
-        const sign = m.marginPercent >= 0 ? "+" : "−";
-        const cls = m.marginPercent >= 15 ? "ok" : m.marginPercent >= 5 ? "warn" : "danger";
-        badges.push(
-          `<span class="${BADGE_CLASS} ${BADGE_CLASS}--${cls}" title="Маржа на основе себестоимости">📊 ${sign}${Math.abs(m.marginPercent).toFixed(1)}%</span>`,
-        );
+        // E2: не рисуем «NaN%» на битых данных.
+        if (Number.isFinite(m.marginPercent)) {
+          const sign = m.marginPercent >= 0 ? "+" : "−";
+          const cls = m.marginPercent >= 15 ? "ok" : m.marginPercent >= 5 ? "warn" : "danger";
+          badges.push(
+            `<span class="${BADGE_CLASS} ${BADGE_CLASS}--${cls}" title="Маржа на основе себестоимости">📊 ${sign}${Math.abs(m.marginPercent).toFixed(1)}%</span>`,
+          );
+        }
       } else {
         badges.push(
           `<span class="${BADGE_CLASS} ${BADGE_CLASS}--neutral" title="Установите себестоимость в popup'е расширения">📊 нет cost</span>`,
@@ -79,12 +82,14 @@ async function run(): Promise<void> {
       }
 
       if (watch && watch.dumpersCount > 0) {
-        const minDelta =
-          watch.minCompetitorPrice != null && watch.myPrice > 0
-            ? ((watch.minCompetitorPrice - watch.myPrice) / watch.myPrice) * 100
-            : 0;
+        const hasDelta = watch.minCompetitorPrice != null && watch.myPrice > 0;
+        const minDelta = hasDelta
+          ? ((watch.minCompetitorPrice! - watch.myPrice) / watch.myPrice) * 100
+          : null;
+        // E2: без известной мин. цены не врём «0.0%» — показываем число демперов.
+        const label = minDelta != null ? `${minDelta.toFixed(1)}%` : `${watch.dumpersCount} демп.`;
         badges.push(
-          `<span class="${BADGE_CLASS} ${BADGE_CLASS}--danger" title="Демперов: ${watch.dumpersCount}">⚠ ${minDelta.toFixed(1)}%</span>`,
+          `<span class="${BADGE_CLASS} ${BADGE_CLASS}--danger" title="Демперов: ${watch.dumpersCount}">⚠ ${label}</span>`,
         );
       }
 
@@ -127,6 +132,8 @@ async function run(): Promise<void> {
         useKaspiRed: settings.useKaspiRed,
         hasSPP: settings.hasSPP,
       });
+      // E2: не рисуем «NaN ₸».
+      if (!Number.isFinite(m.netProfit)) continue;
       const sign = m.netProfit >= 0 ? "+" : "−";
       const cls = m.netProfit >= 0 ? "ok" : "danger";
 

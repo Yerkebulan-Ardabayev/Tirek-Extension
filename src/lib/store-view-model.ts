@@ -106,9 +106,10 @@ export function computeStoreTotals(rows: StoreTableRow[]): StoreTotals {
   let dumpingCheckedCount = 0;
 
   for (const r of rows) {
-    totalRevenue += r.calc.revenue;
-    totalRemainder += r.calc.remainderBeforeCost;
-    if (r.hasCost && r.calc.netProfit !== null) {
+    // Не-финитные значения (битая цена → NaN/Infinity) не отравляют итог.
+    if (Number.isFinite(r.calc.revenue)) totalRevenue += r.calc.revenue;
+    if (Number.isFinite(r.calc.remainderBeforeCost)) totalRemainder += r.calc.remainderBeforeCost;
+    if (r.hasCost && r.calc.netProfit !== null && Number.isFinite(r.calc.netProfit)) {
       totalNetProfit += r.calc.netProfit;
       withCostCount++;
     }
@@ -146,6 +147,14 @@ export type SortDir = "asc" | "desc";
 
 /** Значение строки по ключу сортировки (null = неизвестно, идёт в конец). */
 function sortValue(row: StoreTableRow, key: SortKey): number | string | null {
+  const raw = rawSortValue(row, key);
+  // NaN/Infinity (например битая цена) трактуем как «неизвестно» → в конец,
+  // иначе comparator вернёт NaN и Array.sort выдаст недетерминированный порядок.
+  if (typeof raw === "number" && !Number.isFinite(raw)) return null;
+  return raw;
+}
+
+function rawSortValue(row: StoreTableRow, key: SortKey): number | string | null {
   switch (key) {
     case "name":
       return row.product.name.toLowerCase();

@@ -3,6 +3,7 @@ import {
   DEFAULT_SETTINGS,
   DUMPING_TTL_MS,
   MY_STORE_MERCHANT_ID,
+  MY_STORE_MAX_PRODUCTS,
   STORE_SNAPSHOT_TTL_MS,
   addToWatchlist,
   blacklistShopForSku,
@@ -303,5 +304,60 @@ describe("store progress storage", () => {
     const p = await getStoreProgress();
     expect(p?.phase).toBe("listing");
     expect(p?.productsLoaded).toBe(24);
+  });
+});
+
+describe("C1: атомарность read-modify-write (нет потерянного обновления)", () => {
+  it("два параллельных addToWatchlist сохраняют ОБА товара", async () => {
+    // Замедленный мок get/set провоцирует interleave; serialize() должен не дать
+    // потеряться обновлению (без него один из add'ов затирался бы).
+    const store: Record<string, unknown> = {};
+    const delay = (): Promise<void> => new Promise((r) => setTimeout(r, 1));
+    (globalThis as unknown as { chrome: unknown }).chrome = {
+      storage: {
+        local: {
+          get: async (k: string) => {
+            await delay();
+            return typeof k === "string" && k in store ? { [k]: store[k] } : {};
+          },
+          set: async (kv: Record<string, unknown>) => {
+            await delay();
+            Object.assign(store, kv);
+          },
+          remove: async () => {},
+        },
+      },
+    };
+    const mk = (sku: string): WatchlistItem => ({
+      sku,
+      productName: "P" + sku,
+      url: "u" + sku,
+      myPrice: 1000,
+      minCompetitorPrice: null,
+      addedAt: 1,
+      lastCheckedAt: 1,
+      blacklistedShopIds: [],
+      dumpersCount: 0,
+    });
+    await Promise.all([addToWatchlist(mk("1")), addToWatchlist(mk("2"))]);
+    const list = await getWatchlist();
+    expect(list.map((w) => w.sku).sort()).toEqual(["1", "2"]);
+  });
+});
+
+describe("D2: авто-снимок «Мои товары» не растёт безгранично", () => {
+  it("число товаров капится на MY_STORE_MAX_PRODUCTS, свежий наверху", () => {
+    let snap: StoreSnapshot | null = null;
+    const N = MY_STORE_MAX_PRODUCTS + 50;
+    for (let i = 0; i < N; i++) {
+      snap = mergeProductIntoSnapshot(
+        snap,
+        { sku: "s" + i, name: "n" + i, price: 100, url: "u" + i },
+        null,
+        i,
+      );
+    }
+    expect(snap!.products.length).toBe(MY_STORE_MAX_PRODUCTS);
+    expect(snap!.products[0]!.sku).toBe("s" + (N - 1));
   });
 });

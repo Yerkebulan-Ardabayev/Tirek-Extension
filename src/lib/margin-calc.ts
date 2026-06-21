@@ -191,6 +191,10 @@ export function calculateMargin(input: MarginInput): MarginResult {
     profitBeforeTax,
     regime: input.taxRegime,
     uproshenkaRate: input.uproshenkaRate,
+    // A2: передаём закупку — НДС на ОУР считается с наценки (revenue − cost),
+    // и ставку НДС категории (медицина 5%), чтобы льгота применялась и к НДС с наценки.
+    cost,
+    vatRate: vatPercent / 100,
   });
 
   const netProfit = round2(profitBeforeTax - tax.amount);
@@ -355,13 +359,33 @@ function pctOf(part: number, whole: number): number {
 
 /** Форматирование ₸ для UI. Возвращает «12 500 ₸». */
 export function formatTenge(n: number): string {
+  if (!Number.isFinite(n)) return "— ₸";
   const abs = Math.round(Math.abs(n));
   const grouped = abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  return n < 0 ? `−${grouped} ₸` : `${grouped} ₸`;
+  // Знак берём от ОКРУГЛЁННОЙ величины: значение в (−0.5, 0) округляется к 0,
+  // и «−0 ₸» (старый баг) больше не появляется.
+  const neg = abs !== 0 && n < 0;
+  return neg ? `−${grouped} ₸` : `${grouped} ₸`;
+}
+
+/**
+ * Русское склонение по числу (F2): pluralRu(1, ["товар","товара","товаров"]) → "товар",
+ * 2 → "товара", 5 → "товаров", 11 → "товаров".
+ */
+export function pluralRu(n: number, forms: [string, string, string]): string {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return forms[2];
+  if (b > 1 && b < 5) return forms[1];
+  if (b === 1) return forms[0];
+  return forms[2];
 }
 
 /** Форматирование %, для UI. */
 export function formatPercent(n: number, fractionDigits = 1): string {
-  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
-  return `${sign}${Math.abs(n).toFixed(fractionDigits)}%`;
+  if (!Number.isFinite(n)) return "—%";
+  // Округляем ДО выбора знака, иначе −0.04 → «−0.0%».
+  const rounded = Number(n.toFixed(fractionDigits));
+  const sign = rounded > 0 ? "+" : rounded < 0 ? "−" : "";
+  return `${sign}${Math.abs(rounded).toFixed(fractionDigits)}%`;
 }

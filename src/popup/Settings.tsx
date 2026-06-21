@@ -21,24 +21,38 @@ export function Settings() {
   const [watchCount, setWatchCount] = useState(0);
   const [code, setCode] = useState("");
   const [codeMsg, setCodeMsg] = useState<string | null>(null);
+  const [activating, setActivating] = useState(false);
   const [installId, setInstallId] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  // C2: имя магазина буферизуем локально и пишем в storage на blur, а не на
+  // каждый keystroke (иначе шторм записей + будит onChanged-слушатели).
+  const [shopName, setShopName] = useState<string | null>(null);
 
   useEffect(() => {
-    getSettings().then(setS);
+    getSettings().then((v) => {
+      setS(v);
+      setShopName(v.myShopId);
+    });
     getLicense().then(setLic);
     getWatchlist().then((w) => setWatchCount(w.length));
     getOrCreateInstallId().then(setInstallId);
   }, []);
 
   const activate = async () => {
-    const res = await activateProCode(code);
-    if (res.ok) {
-      setLic(await getLicense());
-      setCode("");
-      setCodeMsg("✓ Pro активирован. Спасибо!");
-    } else {
-      setCodeMsg(res.error ?? "Не удалось активировать код");
+    // C3: не запускаем вторую активацию пока идёт первая (двойной клик).
+    if (activating) return;
+    setActivating(true);
+    try {
+      const res = await activateProCode(code);
+      if (res.ok) {
+        setLic(await getLicense());
+        setCode("");
+        setCodeMsg("✓ Pro активирован. Спасибо!");
+      } else {
+        setCodeMsg(res.error ?? "Не удалось активировать код");
+      }
+    } finally {
+      setActivating(false);
     }
   };
 
@@ -62,9 +76,10 @@ export function Settings() {
         <label>Имя или ID моего магазина на Kaspi</label>
         <input
           type="text"
-          value={s.myShopId ?? ""}
+          value={shopName ?? ""}
           placeholder="Например: shop-7421 или ИП Иванов"
-          onChange={(e) => update({ myShopId: e.target.value || null })}
+          onChange={(e) => setShopName(e.target.value)}
+          onBlur={() => update({ myShopId: (shopName ?? "").trim() || null })}
         />
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
           Используется для распознавания моей цены на карточках товаров.
@@ -194,14 +209,14 @@ export function Settings() {
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>
         Раз в сутки разработчик получает: install_id (UUID), версия плагина,
         счётчики «открыл карточку / добавил в watchlist / открыл калькулятор».
-        Цены, SKU, имя магазина и ссылки — НЕ отправляются.
+        Цены, SKU, имя магазина и ссылки не отправляются.
       </div>
 
       <div className="section-title">Тариф</div>
       {lic?.pro ? (
         <div className="form-row">
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--brand, #ea580c)" }}>
-            ✓ Pro активен — безлимит товаров под наблюдением
+            ✓ Pro активен: безлимит товаров под наблюдением
           </div>
           {lic.code && (
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
@@ -215,7 +230,7 @@ export function Settings() {
             Бесплатно: калькулятор маржи без лимита и наблюдение за{" "}
             {FREE_WATCHLIST_LIMIT} товарами (сейчас {watchCount}/{FREE_WATCHLIST_LIMIT}).
             <br />
-            <b>Pro — {PRICE_MONTHLY_TENGE.toLocaleString("ru-RU")} ₸/мес:</b> безлимит
+            <b>Pro, {PRICE_MONTHLY_TENGE.toLocaleString("ru-RU")} ₸/мес:</b> безлимит
             товаров под наблюдением и анти-демпинг по всему портфелю.
           </div>
           <div
@@ -244,11 +259,21 @@ export function Settings() {
               <button
                 className="btn ghost"
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
                   if (!installId) return;
-                  void navigator.clipboard?.writeText(installId);
-                  setCopied(true);
-                  window.setTimeout(() => setCopied(false), 1500);
+                  // F5: «✓» только при реальном успехе; иначе фолбэк — выделить поле.
+                  const input = (e.currentTarget.parentElement?.querySelector("input") ??
+                    null) as HTMLInputElement | null;
+                  const ok = () => {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1500);
+                  };
+                  const fallback = () => input?.select();
+                  if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(installId).then(ok, fallback);
+                  } else {
+                    fallback();
+                  }
                 }}
               >
                 {copied ? "✓" : "Копировать"}
@@ -279,9 +304,9 @@ export function Settings() {
               className="btn ghost"
               style={{ marginTop: 6 }}
               onClick={activate}
-              disabled={!code.trim()}
+              disabled={!code.trim() || activating}
             >
-              Активировать
+              {activating ? "Проверяем…" : "Активировать"}
             </button>
             {codeMsg && (
               <div style={{ fontSize: 11, marginTop: 6, color: "var(--text-muted)" }}>
@@ -298,7 +323,7 @@ export function Settings() {
         {saving ? "Сохраняем…" : savedAt ? "✓ Сохранено" : ""}
       </div>
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-        Tirek MVP. Тарифы Kaspi и налоги РК актуальны на 2026 год — проверены через
+        Tirek MVP. Тарифы Kaspi и налоги РК актуальны на 2026 год, проверены через
         официальные источники.
       </div>
     </>

@@ -100,4 +100,15 @@ describe("fetchAllOffers (Bug 2 — все продавцы со всех стр
     const res = await fetchAllOffers("1", "710000000", { fetchImpl: mockFetch({ offers: [], total: 0 }) });
     expect(res).toEqual([]);
   });
+
+  it("D1: таймаут на первой странице → throw (вызывающий откатится на DOM)", async () => {
+    // Зависший fetch, который реджектит только по abort-сигналу.
+    const hangFetch = ((_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      })) as unknown as typeof fetch;
+    await expect(
+      fetchAllOffers("104906550", "750000000", { fetchImpl: hangFetch, timeoutMs: 5 }),
+    ).rejects.toThrow();
+  });
 });

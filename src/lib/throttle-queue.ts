@@ -154,7 +154,11 @@ export async function runThrottled<R>(
     .sort((a, b) => b.t.priority - a.t.priority || a.i - b.i)
     .map((x) => x.t);
 
-  const capped = Number.isFinite(dailyCap) ? ordered.slice(0, dailyCap) : ordered;
+  // C5: невалидный dailyCap (отрицательный/дробный) не должен через slice(0,-1)
+  // ронять самую низкоприоритетную задачу под видом «дневного лимита». Клипуем к
+  // неотрицательному целому: 0/отрицательный → не запускаем ничего (всё в dropped).
+  const cap = Number.isFinite(dailyCap) ? Math.max(0, Math.floor(dailyCap)) : Infinity;
+  const capped = cap === Infinity ? ordered : ordered.slice(0, cap);
   const dropped = ordered.length - capped.length;
 
   const results: Array<{ key: string; value: R }> = [];
@@ -194,6 +198,9 @@ export async function runThrottled<R>(
         } catch (err) {
           if (isRetryable(err) && attempt < maxRetries && !controller.cancelled) {
             await sleep(backoffDelay(attempt, backoffBaseMs, jitterMs, rng));
+            // C5: отмена во время бэкофф-сна не должна давать ещё один запрос к Kaspi
+            // (для анти-бан-очереди критично). Перепроверяем ПОСЛЕ сна.
+            if (controller.cancelled) return;
             attempt++;
             continue;
           }

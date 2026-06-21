@@ -141,7 +141,7 @@ describe("getOrCreateInstallId", () => {
     const a = await getOrCreateInstallId();
     const b = await getOrCreateInstallId();
     expect(a).toBe(b);
-    expect(a).toMatch(/^MRG-/);
+    expect(a).toMatch(/^TRK-/);
   });
 });
 
@@ -213,8 +213,26 @@ describe("getLicense — срок действия", () => {
     await setLicense({ pro: true, code: "x", activatedAt: 1, expiresAt: Date.now() - 1000 });
     expect((await getLicense()).pro).toBe(false);
   });
-  it("действующий Pro остаётся Pro", async () => {
+  it("B3: Pro с НЕвалидным кодом сбрасывается (нельзя включить правкой флага storage)", async () => {
     await setLicense({ pro: true, code: "x", activatedAt: 1, expiresAt: Date.now() + 100000 });
-    expect((await getLicense()).pro).toBe(true);
+    // default verify = verifyProCode (вшитый ключ) → код "x" не проходит → не Pro
+    expect((await getLicense()).pro).toBe(false);
+  });
+
+  it("B3: pro=true вообще без кода → не Pro", async () => {
+    await setLicense({ pro: true, code: null, activatedAt: 1, expiresAt: null });
+    expect((await getLicense()).pro).toBe(false);
+  });
+
+  it("B3: действующий Pro с ВАЛИДНОЙ подписью остаётся Pro", async () => {
+    await setLicense({
+      pro: true,
+      code: "TIREK-PRO.payload.sig",
+      activatedAt: 1,
+      expiresAt: Date.now() + 100000,
+    });
+    // инъектируем верификатор, имитирующий успешную проверку подписи
+    const ok = await getLicense(async () => ({ ok: true, expiresAt: null }));
+    expect(ok.pro).toBe(true);
   });
 });

@@ -98,8 +98,11 @@ function turnoverTaxFor(orgForm: OrgForm, revenue: number, uproshenkaRate?: numb
     // что в calculateTax, чтобы остаток и полный расчёт не расходились.
     return round2(revenue * resolveUproshenkaRate(uproshenkaRate));
   }
-  // ОУР (ИП и ТОО) — НДС 16% с оборота. КПН/ИПН с прибыли сюда НЕ входят.
-  return round2(revenue * RATES_2026.vat);
+  // ОУР (ИП и ТОО): для «остатка до закупки» (cost ещё неизвестна) берём ВЫХОДНОЙ
+  // НДС с цены = revenue × r/(1+r) — цены НДС-включающие. Это консервативный верх:
+  // реальный НДС к уплате считается с наценки в полном расчёте, когда задана cost.
+  // КПН/ИПН с прибыли сюда НЕ входят. (A2)
+  return round2((revenue * RATES_2026.vat) / (1 + RATES_2026.vat));
 }
 
 /**

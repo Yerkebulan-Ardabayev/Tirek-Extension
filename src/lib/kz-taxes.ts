@@ -173,7 +173,7 @@ export const TAX_REGIME_INFO: Record<TaxRegime, TaxRegimeInfo> = {
   "ip-osnovnoy": {
     name: "ИП на ОУР (общий режим)",
     shortName: "ИП-ОУР",
-    rate: "10% ИПН с прибыли + 16% НДС с оборота",
+    rate: "10% ИПН с прибыли + 16% НДС с наценки",
     threshold: "НДС обязателен при обороте > 10 000 МРП (~43,25 млн ₸/год)",
     description:
       "ИП на общеустановленном режиме платит ИПН с прибыли (10% до 8 500 МРП " +
@@ -197,7 +197,7 @@ export const TAX_REGIME_INFO: Record<TaxRegime, TaxRegimeInfo> = {
   "too-osnovnoy": {
     name: "ТОО ОУР (общий режим)",
     shortName: "ТОО-ОУР",
-    rate: "20% КПН с прибыли + 16% НДС с оборота",
+    rate: "20% КПН с прибыли + 16% НДС с наценки",
     threshold: "НДС обязателен при обороте > 10 000 МРП (~43,25 млн ₸/год)",
     description:
       "С 2026: КПН 20%, НДС 16% (был 12%), порог НДС снижен с 20 000 до 10 000 МРП. " +
@@ -419,7 +419,7 @@ export const UPROSHENKA_INCOME_LIMIT_SOURCE = NK_RK_2026;
 export type TaxCalculationInput = {
   /** Оборот (выручка) с этой операции, ₸ */
   revenue: number;
-  /** Прибыль до налога, ₸ (используется для КПН) */
+  /** Прибыль до налога, ₸ (используется для КПН/ИПН) */
   profitBeforeTax: number;
   /** Налоговый режим */
   regime: TaxRegime;
@@ -430,6 +430,23 @@ export type TaxCalculationInput = {
    * Применяется только к режимам упрощёнки; для ОУР игнорируется.
    */
   uproshenkaRate?: number;
+  /**
+   * Себестоимость (закупка), ₸ — нужна для КОРРЕКТНОГО НДС на ОУР: НДС платится
+   * с НАЦЕНКИ (revenue − cost), а не со всей выручки. Если не задана (0) — НДС
+   * считается как выходной с цены без зачёта входного (консервативно, но всё
+   * равно не «16% со всей выручки», а 16/116 от цены).
+   */
+  cost?: number;
+  /**
+   * Плательщик ли НДС (оборот > 10 000 МРП ≈ 43,25 млн ₸/год). Только для ОУР.
+   * По умолчанию true (на ОУР обычно идут как раз из-за НДС-порога). false → НДС 0.
+   */
+  isVatPayer?: boolean;
+  /**
+   * Ставка НДС (доля) для ОУР с учётом льготных категорий (медицина/лекарства 5%
+   * в 2026). По умолчанию стандартная RATES_2026.vat (16%). Применяется к НДС с наценки.
+   */
+  vatRate?: number;
 };
 
 export type TaxCalculationResult = {
@@ -444,67 +461,61 @@ export type TaxCalculationResult = {
 /**
  * Считает налог с операции для калькулятора маржи.
  *
- * ВНИМАНИЕ: упрощённая модель — НЕ годовой расчёт, а оценка «сколько налогов
- * пойдёт государству с этой конкретной продажи».
+ * ВНИМАНИЕ: упрощённая ПО-ОПЕРАЦИИ оценка, не годовой расчёт. Не заменяет
+ * бухгалтера — финальные суммы сверять с учётом.
  *
  * Логика:
- *   - Упрощёнка (ИП/ТОО): 4% с выручки. Если прибыль ≤ 0 — налог 0
- *     (формально на упрощёнке платят с дохода, но если бизнес в минус —
- *     не показываем «маржа −X% и сверху налог»; для калькулятора реалистичнее).
- *   - ОУР: КПН 20% с прибыли + НДС 16% с выручки.
- *     При прибыли ≤ 0 КПН = 0, НДС всё равно платится (с оборота).
+ *   - Упрощёнка (ИП/ТОО): ставка региона с ОБОРОТА, ВСЕГДА (ст. 726 НК РК),
+ *     в т.ч. при убытке — на упрощёнке налог с дохода не зависит от прибыли
+ *     (A3: иначе у точки безубыточности разрыв и занижение).
+ *   - ОУР: налог с прибыли (ИП — ИПН 10%, ТОО — КПН 20%) + НДС.
+ *     НДС берётся С НАЦЕНКИ (A2): цены Kaspi розничные, т.е. НДС-включающие,
+ *     поэтому к уплате = (revenue − cost) × r/(1+r), а не «16% со всей выручки»
+ *     (это завышало налог в разы и делало прибыльный товар «убыточным»).
  */
 export function calculateTax(input: TaxCalculationInput): TaxCalculationResult {
   const { revenue, profitBeforeTax, regime } = input;
+  const cost =
+    typeof input.cost === "number" && isFinite(input.cost) && input.cost > 0 ? input.cost : 0;
+  const isVatPayer = input.isVatPayer ?? true;
   const breakdown: Array<{ label: string; amount: number }> = [];
   let amount = 0;
 
   if (regime === "ip-uproshenka" || regime === "too-uproshenka") {
-    // Ставка упрощёнки с учётом региона (ст. 726 НК РК: базовая 4%, маслихат ±50%).
-    // На упрощёнке считают с дохода до вычета расходов, но при отрицательной
-    // прибыли калькулятор показывает 0 (юзер увидит, что бизнес-модель убыточна,
-    // и реальный налог уже не главная боль).
+    // A3: упрощёнка платится с оборота независимо от прибыли (ст. 726 НК РК).
     const rate = resolveUproshenkaRate(input.uproshenkaRate);
-    if (profitBeforeTax > 0) {
-      const tax = round2(revenue * rate);
-      breakdown.push({ label: "Упрощёнка " + formatRatePercent(rate) + " с оборота", amount: tax });
-      amount = tax;
-    } else {
-      breakdown.push({ label: "Упрощёнка (убыток, налог 0 в модели)", amount: 0 });
+    const tax = round2(revenue * rate);
+    breakdown.push({ label: "Упрощёнка " + formatRatePercent(rate) + " с оборота", amount: tax });
+    amount = tax;
+    return {
+      amount,
+      breakdown,
+      effectiveRatePercent: revenue > 0 ? round2((amount / revenue) * 100) : 0,
+    };
+  }
+
+  if (regime === "ip-osnovnoy" || regime === "too-osnovnoy") {
+    // Налог с прибыли: ИП на ОУР — ИПН 10% (ст. 363); ТОО на ОУР — КПН 20%.
+    const profitRate = regime === "ip-osnovnoy" ? IPN_RATES.standard : RATES_2026.kpn;
+    const profitLabel = regime === "ip-osnovnoy" ? "ИПН 10% с прибыли" : "КПН 20% с прибыли";
+    const profitTax = profitBeforeTax > 0 ? round2(profitBeforeTax * profitRate) : 0;
+    if (profitTax > 0) breakdown.push({ label: profitLabel, amount: profitTax });
+
+    // A2: НДС с наценки (цены НДС-включающие, входной НДС зачтён). Ставка учитывает
+    // льготные категории (медицина 5% в 2026), если передана vatRate.
+    let vat = 0;
+    if (isVatPayer) {
+      const vatRate =
+        typeof input.vatRate === "number" && isFinite(input.vatRate) && input.vatRate > 0
+          ? input.vatRate
+          : RATES_2026.vat;
+      vat = vatOnMargin(revenue, cost, vatRate);
+      breakdown.push({
+        label: `НДС ${formatRatePercent(vatRate)} с наценки (цены с НДС, входной зачтён)`,
+        amount: vat,
+      });
     }
-    return {
-      amount,
-      breakdown,
-      effectiveRatePercent: revenue > 0 ? round2((amount / revenue) * 100) : 0,
-    };
-  }
-
-  if (regime === "ip-osnovnoy") {
-    // ИП на ОУР: ИПН с прибыли (а не КПН). Шкала двухступенчатая —
-    // 10% до 8 500 МРП годового дохода, 15% свыше. На одну продажу порог
-    // 8 500 МРП (~36,8 млн ₸) практически недостижим, поэтому в оценке с
-    // операции берём базовую ставку 10%. НДС 16% с оборота как у ОУР
-    // (если ИП — плательщик НДС, оборот > 10 000 МРП).
-    const ipn = profitBeforeTax > 0 ? round2(profitBeforeTax * IPN_RATES.standard) : 0;
-    if (ipn > 0) breakdown.push({ label: "ИПН 10% с прибыли", amount: ipn });
-    const vat = round2(revenue * RATES_2026.vat);
-    breakdown.push({ label: "НДС 16% с оборота", amount: vat });
-    amount = round2(ipn + vat);
-    return {
-      amount,
-      breakdown,
-      effectiveRatePercent: revenue > 0 ? round2((amount / revenue) * 100) : 0,
-    };
-  }
-
-  if (regime === "too-osnovnoy") {
-    // КПН 20% с прибыли (если прибыль > 0).
-    const kpn = profitBeforeTax > 0 ? round2(profitBeforeTax * RATES_2026.kpn) : 0;
-    if (kpn > 0) breakdown.push({ label: "КПН 20% с прибыли", amount: kpn });
-    // НДС 16% с выручки.
-    const vat = round2(revenue * RATES_2026.vat);
-    breakdown.push({ label: "НДС 16% с оборота", amount: vat });
-    amount = round2(kpn + vat);
+    amount = round2(profitTax + vat);
     return {
       amount,
       breakdown,
@@ -514,6 +525,17 @@ export function calculateTax(input: TaxCalculationInput): TaxCalculationResult {
 
   // На случай если расширят TaxRegime
   return { amount: 0, breakdown: [], effectiveRatePercent: 0 };
+}
+
+/**
+ * НДС к уплате на ОУР для перепродажи: с добавленной стоимости (наценки).
+ * Цены РК розничные, НДС-включающие, поэтому ставка применяется как r/(1+r).
+ * При cost=0 (неизвестна) — выходной НДС с цены без зачёта (консервативно).
+ * Floored на 0: модель «с операции» не возвращает НДС-кредит.
+ */
+function vatOnMargin(revenue: number, cost: number, rate: number): number {
+  const addedValue = Math.max(0, revenue - cost);
+  return round2((addedValue * rate) / (1 + rate));
 }
 
 /** Округление до сотых (для денег в ₸ — целых, но оставляем для тестов гибкость). */

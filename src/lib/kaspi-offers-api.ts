@@ -97,6 +97,8 @@ export type FetchOffersOptions = {
   maxPages?: number;
   /** Инъекция fetch для тестов. */
   fetchImpl?: typeof fetch;
+  /** Таймаут на каждый запрос страницы, мс (D1). По умолчанию 8000. */
+  timeoutMs?: number;
 };
 
 /**
@@ -113,16 +115,32 @@ export async function fetchAllOffers(
   const limit = opts.limit ?? 64;
   const maxPages = opts.maxPages ?? 8;
   const doFetch = opts.fetchImpl ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? 8000;
   const collected: Competitor[] = [];
   let total = Infinity;
 
   for (let page = 0; page < maxPages && collected.length < total; page++) {
-    const res = await doFetch("https://kaspi.kz/yml/offer-view/offers/" + masterId, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cityId, id: masterId, page, limit, sort: true }),
-      credentials: "include",
-    });
+    // D1: таймаут на запрос. Без него зависший Kaspi (медленная/оборванная сеть)
+    // никогда не реджектил промис, и overlay вообще не монтировался (run() ждал).
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await doFetch("https://kaspi.kz/yml/offer-view/offers/" + masterId, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cityId, id: masterId, page, limit, sort: true }),
+        credentials: "include",
+        signal: ac.signal,
+      });
+    } catch (err) {
+      // Первый запрос упал/таймаут → пробрасываем, вызывающий откатится на DOM.
+      // Последующие — берём что успели собрать.
+      if (page === 0) throw err;
+      break;
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) {
       if (page === 0) throw new Error("offer-view HTTP " + res.status);
       break;

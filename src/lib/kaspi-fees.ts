@@ -23,6 +23,19 @@
  *
  * ВНИМАНИЕ: % указан БЕЗ НДС (как Kaspi показывает с 5 января 2026).
  * В фактической комиссии добавится НДС (16% с 2026, было 12%).
+ *
+ * ⚠️ A7 — СТАТУС ВЕРИФИКАЦИИ 2026 (проверка через guide.kaspi.kz):
+ *   - ПОДТВЕРЖДЕНО офиц. Kaspi Гид: с 5 января 2026 комиссия показывается БЕЗ НДС,
+ *     налог считается отдельно (q4467, обновлён 02.02.2026). Модель кода верна.
+ *   - 🔴 РАСХОЖДЕНИЕ по «Электронике»: Kaspi Гид q4467 пишет «комиссия с НДС = 12,5%»
+ *     (т.е. ~10,78% без НДС), а здесь 7%. Это может быть комиссия Магазина выше, чем
+ *     в нашем источнике (kaspipro/Red+). Полную «Таблицу с тарифами» Магазина Kaspi
+ *     отдаёт ТОЛЬКО в кабинете продавца (публично текстом не доступна).
+ *   - ДЕЙСТВИЕ ВЛАДЕЛЬЦУ: выгрузить актуальную «Таблицу с тарифами» из кабинета и
+ *     сверить ВСЕ категории. До сверки неподтверждённые ставки помечены confidence
+ *     != verified и показываются в UI с «~».
+ *   Источники: https://guide.kaspi.kz/partner/ru/shop/conditions/q4467
+ *             https://guide.kaspi.kz/partner/ru/shop/conditions/q1344
  */
 
 export type KaspiCategory = {
@@ -60,8 +73,11 @@ export const KASPI_CATEGORIES: readonly KaspiCategory[] = [
     id: "electronics",
     name: "Электроника (телефоны, ноутбуки, ТВ)",
     feePercent: 7,
-    confidence: "verified",
-    source: "https://kaspipro.kz/",
+    // A7: понижено до average — офиц. Kaspi Гид q4467 даёт по электронике 12,5% с НДС
+    // (~10,78% без НДС), что расходится с 7%. Сверить по «Таблице с тарифами» кабинета.
+    confidence: "average",
+    source: "https://guide.kaspi.kz/partner/ru/shop/conditions/q4467",
+    note: "Расхождение с офиц. Kaspi (12,5% с НДС). Сверить по таблице тарифов кабинета.",
   },
   {
     id: "appliances",
@@ -271,5 +287,10 @@ export function getCategoryById(id: string): KaspiCategory {
 
 /** Категории как pairs для UI dropdown'ов. */
 export function getCategoryOptions(): Array<{ value: string; label: string }> {
-  return KASPI_CATEGORIES.map((c) => ({ value: c.id, label: `${c.name} — ${c.feePercent}%` }));
+  return KASPI_CATEGORIES.map((c) => {
+    // A7: «~» у неподтверждённых ставок (average/estimated), чтобы селлер видел,
+    // что процент это оценка, а не сверенный с Kaspi факт. verified — без пометки.
+    const mark = c.confidence === "verified" ? "" : "~";
+    return { value: c.id, label: `${c.name}: ${mark}${c.feePercent}%` };
+  });
 }

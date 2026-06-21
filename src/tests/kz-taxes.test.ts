@@ -270,13 +270,13 @@ describe("calculateTax — упрощёнка ИП", () => {
     expect(r.effectiveRatePercent).toBeCloseTo(4, 2);
   });
 
-  it("на убытке (profitBeforeTax < 0) — 0", () => {
+  it("A3: на убытке упрощёнка всё равно с оборота (4% × 100 000 = 4000)", () => {
     const r = calculateTax({
       revenue: 100_000,
       profitBeforeTax: -5_000,
       regime: "ip-uproshenka",
     });
-    expect(r.amount).toBe(0);
+    expect(r.amount).toBe(4000);
   });
 
   it("маленький оборот", () => {
@@ -308,9 +308,9 @@ describe("calculateTax — ТОО ОУР", () => {
       regime: "too-osnovnoy",
     });
     // КПН: 30 000 × 0.20 = 6 000
-    // НДС: 100 000 × 0.16 = 16 000
-    // Итого: 22 000
-    expect(r.amount).toBe(22000);
+    // A2: НДС с наценки; cost не задан → выходной = 100 000 × 16/116 ≈ 13 793.10
+    // Итого: ≈ 19 793.10
+    expect(r.amount).toBeCloseTo(19793.1, 1);
 
     // breakdown содержит обе строки
     const labels = r.breakdown.map((b) => b.label);
@@ -318,14 +318,14 @@ describe("calculateTax — ТОО ОУР", () => {
     expect(labels.some((l) => l.includes("НДС"))).toBe(true);
   });
 
-  it("на убытке КПН=0, НДС всё равно платится", () => {
+  it("на убытке КПН=0, НДС с наценки всё равно платится", () => {
     const r = calculateTax({
       revenue: 100_000,
       profitBeforeTax: -10_000,
       regime: "too-osnovnoy",
     });
-    // КПН 0 (убыток), НДС 16 000
-    expect(r.amount).toBe(16000);
+    // КПН 0 (убыток); НДС (выходной, cost=0): 100 000 × 16/116 ≈ 13 793.10
+    expect(r.amount).toBeCloseTo(13793.1, 1);
   });
 
   it("большой оборот", () => {
@@ -335,22 +335,22 @@ describe("calculateTax — ТОО ОУР", () => {
       regime: "too-osnovnoy",
     });
     // КПН: 2 000 000 × 0.20 = 400 000
-    // НДС: 10 000 000 × 0.16 = 1 600 000
-    expect(r.amount).toBe(2_000_000);
+    // НДС (выходной, cost=0): 10 000 000 × 16/116 ≈ 1 379 310.34
+    expect(r.amount).toBeCloseTo(1_779_310.34, 1);
   });
 });
 
 describe("calculateTax — ИП ОУР", () => {
-  it("ИПН 10% с прибыли + НДС 16% с оборота", () => {
+  it("ИПН 10% с прибыли + НДС 16% с наценки", () => {
     const r = calculateTax({
       revenue: 100_000,
       profitBeforeTax: 30_000,
       regime: "ip-osnovnoy",
     });
     // ИПН: 30 000 × 0.10 = 3 000
-    // НДС: 100 000 × 0.16 = 16 000
-    // Итого: 19 000
-    expect(r.amount).toBe(19000);
+    // НДС (выходной, cost=0): 100 000 × 16/116 ≈ 13 793.10
+    // Итого: ≈ 16 793.10
+    expect(r.amount).toBeCloseTo(16793.1, 1);
     const labels = r.breakdown.map((b) => b.label);
     expect(labels.some((l) => l.includes("ИПН"))).toBe(true);
     expect(labels.some((l) => l.includes("НДС"))).toBe(true);
@@ -358,13 +358,39 @@ describe("calculateTax — ИП ОУР", () => {
     expect(labels.some((l) => l.includes("КПН"))).toBe(false);
   });
 
-  it("на убытке ИПН=0, НДС всё равно платится", () => {
+  it("на убытке ИПН=0, НДС с наценки всё равно платится", () => {
     const r = calculateTax({
       revenue: 100_000,
       profitBeforeTax: -10_000,
       regime: "ip-osnovnoy",
     });
-    expect(r.amount).toBe(16000);
+    expect(r.amount).toBeCloseTo(13793.1, 1);
+  });
+
+  it("A2: заданная закупка снижает НДС (с наценки, не «16% всей выручки»)", () => {
+    // revenue 100 000, закупка 70 000 → наценка 30 000.
+    // НДС = 30 000 × 16/116 ≈ 4 137.93; КПН 10 000 × 0.20 = 2 000; итого ≈ 6 137.93.
+    const r = calculateTax({
+      revenue: 100_000,
+      profitBeforeTax: 10_000,
+      regime: "too-osnovnoy",
+      cost: 70_000,
+    });
+    const vatRow = r.breakdown.find((b) => b.label.includes("НДС"));
+    expect(vatRow?.amount).toBeCloseTo(4137.93, 1);
+    expect(r.amount).toBeCloseTo(6137.93, 1);
+  });
+
+  it("A2: не плательщик НДС (isVatPayer=false) → НДС 0", () => {
+    const r = calculateTax({
+      revenue: 100_000,
+      profitBeforeTax: 30_000,
+      regime: "too-osnovnoy",
+      cost: 60_000,
+      isVatPayer: false,
+    });
+    expect(r.breakdown.some((b) => b.label.includes("НДС"))).toBe(false);
+    expect(r.amount).toBe(6000); // только КПН 30 000 × 0.20
   });
 });
 

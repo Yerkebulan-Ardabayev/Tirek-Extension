@@ -182,3 +182,36 @@ describe("runThrottled — отмена и пауза", () => {
     expect(sleeps).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("C5: dailyCap и отмена в бэкоффе", () => {
+  it("отрицательный dailyCap → ничего не запускаем (всё в dropped), не slice(0,-1)", async () => {
+    const tasks: ThrottleTask<number>[] = [1, 2, 3].map((n) => ({
+      key: String(n),
+      priority: n,
+      run: async () => n,
+    }));
+    const res = await runThrottled(tasks, { sleep: noSleep, rng: zeroRng, dailyCap: -1 });
+    expect(res.completed).toBe(0);
+    expect(res.dropped).toBe(3);
+  });
+
+  it("отмена во время бэкофф-сна не даёт лишнего запроса (run ровно 1)", async () => {
+    let runs = 0;
+    let sleepCalls = 0;
+    const controller = new ThrottleController();
+    const task: ThrottleTask<number> = {
+      key: "x",
+      priority: 1,
+      run: async () => {
+        runs++;
+        throw new RetryableError("429", 429);
+      },
+    };
+    const sleep = async () => {
+      sleepCalls++;
+      if (sleepCalls >= 2) controller.cancel(); // 1-й сон = троттл, 2-й = бэкофф
+    };
+    await runThrottled([task], { sleep, rng: zeroRng, controller, maxRetries: 3 });
+    expect(runs).toBe(1);
+  });
+});

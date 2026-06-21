@@ -26,17 +26,17 @@ describe("calculateStoreRow — без себестоимости (остато�
       categoryId: "electronics",
       orgForm: "too-osnovnoy",
     });
-    expect(r.turnoverTax).toBe(1600); // НДС 16%, без КПН
-    expect(r.remainderBeforeCost).toBe(7488); // 10000 − 912 − 1600
+    expect(r.turnoverTax).toBeCloseTo(1379.31, 1); // A2: выходной НДС 16/116, без КПН
+    expect(r.remainderBeforeCost).toBeCloseTo(7708.69, 1); // 10000 − 912 − 1379.31
   });
 
-  it("ИП ОУР: остаток тоже на НДС 16% (без ИПН с прибыли)", () => {
+  it("ИП ОУР: остаток тоже на выходном НДС (без ИПН с прибыли)", () => {
     const r = calculateStoreRow({
       price: 10_000,
       categoryId: "electronics",
       orgForm: "ip-osnovnoy",
     });
-    expect(r.turnoverTax).toBe(1600);
+    expect(r.turnoverTax).toBeCloseTo(1379.31, 1); // A2: выходной НДС 16/116
   });
 
   it("розничный = упрощёнка (налог с оборота 4%)", () => {
@@ -135,10 +135,10 @@ describe("calculateStoreRow — с себестоимостью (чистая п
       cost: 6_000,
       returnsRatePercent: 0,
     });
-    // tax = КПН(3088×0.2=617.6) + НДС(1600) = 2217.6
-    expect(r.taxTotal).toBe(2217.6);
-    expect(r.netProfit).toBe(870.4); // 3088 − 2217.6
-    expect(r.marginPercent).toBe(8.7);
+    // A2: tax = КПН(3088×0.2=617.6) + НДС с наценки (4000×16/116≈551.72) ≈ 1169.32
+    expect(r.taxTotal).toBeCloseTo(1169.32, 1);
+    expect(r.netProfit).toBeCloseTo(1918.68, 1); // 3088 − 1169.32
+    expect(r.marginPercent).toBeCloseTo(19.19, 1);
   });
 
   it("cost = 0 считается заданной себестоимостью (hasCost true)", () => {

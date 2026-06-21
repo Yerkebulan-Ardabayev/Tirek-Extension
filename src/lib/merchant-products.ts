@@ -23,6 +23,7 @@
  */
 
 import { extractMasterId } from "./kaspi-offers-api";
+import { parseTenge } from "./csv-import";
 import type { StoreProduct } from "./types";
 
 /** Одна страница листинга. */
@@ -48,11 +49,20 @@ export function extractSkuFromProductUrl(url: string): string | null {
 /** Первая цена в ₸ из текста карточки. null, если не нашли. */
 export function parsePriceFromText(text: string): number | null {
   if (!text) return null;
-  // число (с пробелами/NBSP-тысячами) перед валютным маркером
-  const m = text.match(/(\d[\d\s ]*)\s*(?:₸|тенге|тг|kzt)/iu);
-  if (!m?.[1]) return null;
-  const n = Number(m[1].replace(/[\s ]/g, ""));
-  return Number.isFinite(n) && n >= 50 && n <= 50_000_000 ? n : null;
+  // Число перед валютным маркером, с границей слева (не цифра/буква/разделитель),
+  // чтобы «Hoco UA18 1 998 ₸» не склеилось в 181998. Тысячи: пробел/NBSP/узкий.
+  // Разбор самого числа делегируем parseTenge (единый локаль-устойчивый парсер).
+  const re =
+    /(?<![\d.,\p{L}])(\d{1,3}(?:[\s  ]\d{3})+|\d+)(?:[.,]\d{1,2})?\s*(?:₸|тенге|тг|kzt)/giu;
+  let best: number | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const n = parseTenge(m[0]);
+    // Берём ПОСЛЕДНЮЮ валидную цену; порог >=1 чтобы не терять дешёвые товары,
+    // верх sanity 50 млн ₸. Currency-якорь уже отсекает число отзывов/рейтинг.
+    if (n != null && n >= 1 && n <= 50_000_000) best = n;
+  }
+  return best;
 }
 
 /**

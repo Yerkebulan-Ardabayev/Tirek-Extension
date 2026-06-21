@@ -93,6 +93,24 @@ async function setRaw<T>(key: string, value: T): Promise<void> {
   await chrome.storage.local.set({ [key]: value });
 }
 
+/**
+ * Сериализатор read-modify-write (C1/C4). chrome.storage не атомарен: два
+ * параллельных get→mutate→set (двойной ре-ран content-script, несколько вкладок
+ * Kaspi) дают «потерянное обновление». Все мутаторы прогоняем через единую
+ * промис-цепочку этого контекста — операции не перекрываются. (Межвкладочную
+ * атомарность это не закрывает полностью — разные JS-реалмы; но снимает основной
+ * случай: гонку внутри одного content-script/попапа.)
+ */
+let opChain: Promise<unknown> = Promise.resolve();
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const run = opChain.then(fn, fn);
+  opChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 // --- settings ---------------------------------------------------------------
 
 export async function getSettings(): Promise<SellerSettings> {
@@ -101,10 +119,24 @@ export async function getSettings(): Promise<SellerSettings> {
 }
 
 export async function setSettings(patch: Partial<SellerSettings>): Promise<SellerSettings> {
-  const current = await getSettings();
-  const next: SellerSettings = { ...current, ...patch };
-  await setRaw(KEYS.settings, next);
-  return next;
+  return serialize(async () => {
+    const current = await getSettings();
+    const next: SellerSettings = { ...current, ...patch };
+    await setRaw(KEYS.settings, next);
+    return next;
+  });
+}
+
+// --- calc form (E4: калькулятор не теряет ввод при закрытии popup) -----------
+
+const CALC_FORM_KEY = "tirek:calcForm";
+
+export async function getCalcForm<T>(): Promise<T | null> {
+  return (await getRaw<T>(CALC_FORM_KEY)) ?? null;
+}
+
+export async function setCalcForm<T>(form: T): Promise<void> {
+  await setRaw(CALC_FORM_KEY, form);
 }
 
 // --- watchlist --------------------------------------------------------------
@@ -114,51 +146,59 @@ export async function getWatchlist(): Promise<WatchlistItem[]> {
 }
 
 export async function addToWatchlist(item: WatchlistItem): Promise<WatchlistItem[]> {
-  const list = await getWatchlist();
-  const existing = list.findIndex((it) => it.sku === item.sku);
-  if (existing >= 0) {
-    const prev = list[existing];
-    if (prev) {
-      // Сохраняем оригинальный addedAt чтобы порядок не сбивался
-      list[existing] = { ...prev, ...item, addedAt: prev.addedAt };
+  return serialize(async () => {
+    const list = await getWatchlist();
+    const existing = list.findIndex((it) => it.sku === item.sku);
+    if (existing >= 0) {
+      const prev = list[existing];
+      if (prev) {
+        // Сохраняем оригинальный addedAt чтобы порядок не сбивался
+        list[existing] = { ...prev, ...item, addedAt: prev.addedAt };
+      }
+    } else {
+      list.unshift(item);
     }
-  } else {
-    list.unshift(item);
-  }
-  await setRaw(KEYS.watchlist, list);
-  return list;
+    await setRaw(KEYS.watchlist, list);
+    return list;
+  });
 }
 
 export async function removeFromWatchlist(sku: string): Promise<WatchlistItem[]> {
-  const list = await getWatchlist();
-  const next = list.filter((it) => it.sku !== sku);
-  await setRaw(KEYS.watchlist, next);
-  return next;
+  return serialize(async () => {
+    const list = await getWatchlist();
+    const next = list.filter((it) => it.sku !== sku);
+    await setRaw(KEYS.watchlist, next);
+    return next;
+  });
 }
 
 export async function updateWatchlistItem(
   sku: string,
   patch: Partial<WatchlistItem>,
 ): Promise<WatchlistItem | null> {
-  const list = await getWatchlist();
-  const idx = list.findIndex((it) => it.sku === sku);
-  if (idx < 0) return null;
-  const current = list[idx];
-  if (!current) return null;
-  const updated: WatchlistItem = { ...current, ...patch, sku };
-  list[idx] = updated;
-  await setRaw(KEYS.watchlist, list);
-  return updated;
+  return serialize(async () => {
+    const list = await getWatchlist();
+    const idx = list.findIndex((it) => it.sku === sku);
+    if (idx < 0) return null;
+    const current = list[idx];
+    if (!current) return null;
+    const updated: WatchlistItem = { ...current, ...patch, sku };
+    list[idx] = updated;
+    await setRaw(KEYS.watchlist, list);
+    return updated;
+  });
 }
 
 export async function blacklistShopForSku(sku: string, shopId: string): Promise<void> {
-  const list = await getWatchlist();
-  const item = list.find((it) => it.sku === sku);
-  if (!item) return;
-  if (!item.blacklistedShopIds.includes(shopId)) {
-    item.blacklistedShopIds.push(shopId);
-    await setRaw(KEYS.watchlist, list);
-  }
+  return serialize(async () => {
+    const list = await getWatchlist();
+    const item = list.find((it) => it.sku === sku);
+    if (!item) return;
+    if (!item.blacklistedShopIds.includes(shopId)) {
+      item.blacklistedShopIds.push(shopId);
+      await setRaw(KEYS.watchlist, list);
+    }
+  });
 }
 
 // --- costs ------------------------------------------------------------------
@@ -169,9 +209,11 @@ export async function getCostProfile(sku: string): Promise<SkuCostProfile | null
 }
 
 export async function setCostProfile(profile: SkuCostProfile): Promise<void> {
-  const all = (await getRaw<Record<string, SkuCostProfile>>(KEYS.costs)) ?? {};
-  all[profile.sku] = { ...profile, updatedAt: Date.now() };
-  await setRaw(KEYS.costs, all);
+  return serialize(async () => {
+    const all = (await getRaw<Record<string, SkuCostProfile>>(KEYS.costs)) ?? {};
+    all[profile.sku] = { ...profile, updatedAt: Date.now() };
+    await setRaw(KEYS.costs, all);
+  });
 }
 
 export async function getAllCostProfiles(): Promise<Record<string, SkuCostProfile>> {
@@ -186,9 +228,11 @@ export async function getLastSeen(sku: string): Promise<Competitor[] | null> {
 }
 
 export async function setLastSeen(sku: string, competitors: Competitor[]): Promise<void> {
-  const all = (await getRaw<Record<string, Competitor[]>>(KEYS.lastSeen)) ?? {};
-  all[sku] = competitors;
-  await setRaw(KEYS.lastSeen, all);
+  return serialize(async () => {
+    const all = (await getRaw<Record<string, Competitor[]>>(KEYS.lastSeen)) ?? {};
+    all[sku] = competitors;
+    await setRaw(KEYS.lastSeen, all);
+  });
 }
 
 // --- store snapshot (фаза 2 «Обзор магазина») -------------------------------
@@ -227,10 +271,12 @@ export async function updateStoreDumping(
   sku: string,
   result: StoreDumping,
 ): Promise<void> {
-  const snap = await getStoreSnapshot(merchantId);
-  if (!snap) return;
-  snap.dumping[sku] = result;
-  await setStoreSnapshot(snap);
+  return serialize(async () => {
+    const snap = await getStoreSnapshot(merchantId);
+    if (!snap) return;
+    snap.dumping[sku] = result;
+    await setStoreSnapshot(snap);
+  });
 }
 
 /**
@@ -239,6 +285,13 @@ export async function updateStoreDumping(
  * Это и есть «забей цены сам»: ничего вводить не надо, товар подтягивается с карточки.
  */
 export const MY_STORE_MERCHANT_ID = "__my_store__";
+
+/**
+ * Потолок числа товаров в авто-снимке «Мои товары» (D2). Без него снимок рос
+ * безгранично при просмотре большого каталога и раздувал chrome.storage.local
+ * (а getAllStoreSnapshots читает его целиком). Держим самые свежие N.
+ */
+export const MY_STORE_MAX_PRODUCTS = 2000;
 
 /**
  * Чистая функция: вставить/обновить ОДИН товар в снимок (для авто-сбора).
@@ -259,8 +312,17 @@ export function mergeProductIntoSnapshot(
     products: [],
     dumping: {},
   };
-  const products = [product, ...base.products.filter((p) => p.sku !== product.sku)];
-  const dumpingMap = { ...base.dumping };
+  // D2: свежий товар наверх, дедуп по sku, и ЖЁСТКИЙ потолок числа товаров.
+  const products = [product, ...base.products.filter((p) => p.sku !== product.sku)].slice(
+    0,
+    MY_STORE_MAX_PRODUCTS,
+  );
+  // Прунинг dumping для выпавших за потолок sku, чтобы карта не росла отдельно.
+  const keep = new Set(products.map((p) => p.sku));
+  const dumpingMap: Record<string, StoreDumping> = {};
+  for (const [sku, d] of Object.entries(base.dumping)) {
+    if (keep.has(sku)) dumpingMap[sku] = d;
+  }
   if (dumping) dumpingMap[product.sku] = dumping;
   return { ...base, merchantId, fetchedAt: now, products, dumping: dumpingMap };
 }
@@ -270,9 +332,11 @@ export async function upsertMyStoreProduct(
   product: StoreProduct,
   dumping: StoreDumping | null,
 ): Promise<void> {
-  const prev = await getStoreSnapshot(MY_STORE_MERCHANT_ID);
-  const next = mergeProductIntoSnapshot(prev, product, dumping, Date.now());
-  await setStoreSnapshot(next);
+  return serialize(async () => {
+    const prev = await getStoreSnapshot(MY_STORE_MERCHANT_ID);
+    const next = mergeProductIntoSnapshot(prev, product, dumping, Date.now());
+    await setStoreSnapshot(next);
+  });
 }
 
 /** Свеж ли снимок листинга (в пределах TTL). */

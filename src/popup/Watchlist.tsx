@@ -86,8 +86,8 @@ export function Watchlist() {
             color: "var(--text-muted)",
           }}
         >
-          Достигнут лимит бесплатного тарифа ({FREE_WATCHLIST_LIMIT} товара). Pro —
-          безлимит. Откройте «Настройки» → «Тариф».
+          Достигнут лимит бесплатного тарифа ({FREE_WATCHLIST_LIMIT} товара). Pro:
+          безлимит. Откройте «Настройки», раздел «Тариф».
         </div>
       )}
       {items.map((it) => {

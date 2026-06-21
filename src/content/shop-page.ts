@@ -253,7 +253,8 @@ async function addToWatchlistFromSnapshot(
   competitors: Competitor[],
 ): Promise<boolean> {
   if (!snap.sku) {
-    alert("Tirek: не удалось определить SKU товара. Попробуйте обновить страницу.");
+    // E5: не блокируем страницу Kaspi нативным alert(). Overlay покажет тост.
+    console.warn("[Tirek] не удалось определить SKU товара — в watchlist не добавлено");
     return false;
   }
   const dumpers = competitors.filter((c) => myPrice != null && c.price < myPrice);
@@ -296,8 +297,22 @@ let lastSnapshotEmpty = false;
 let lazyRetries = 0;
 const LAZY_RETRY_MAX = 5;
 let lazyRetryTimer: ReturnType<typeof setTimeout> | null = null;
+// C4: два механизма ре-рана (poll-таймер + MutationObserver) делят lazyRetries
+// и могли запустить run() параллельно (двойной парс/телеметрия/запись). Флаг
+// не даёт перекрываться запускам.
+let running = false;
 
 async function runAndRecord(): Promise<void> {
+  if (running) return;
+  running = true;
+  try {
+    await runOnce();
+  } finally {
+    running = false;
+  }
+}
+
+async function runOnce(): Promise<void> {
   await run();
   // Считываем состояние сразу из бейджа — он отражает что увидел парсер
   // (см. renderBadge в overlay.ts). Это проще чем экспортировать state.
@@ -356,7 +371,9 @@ const lazyPollTimer = setInterval(() => {
 //      Лимит LAZY_RETRY_MAX защищает от infinite-loop если страница
 //      постоянно меняется.
 let lastUrl = location.href;
-new MutationObserver(() => {
+let navDebounce: ReturnType<typeof setTimeout> | null = null;
+
+function onDomMutated(): void {
   // 1. Сменился URL → перезапуск с нуля
   if (location.href !== lastUrl) {
     lastUrl = location.href;
@@ -391,4 +408,15 @@ new MutationObserver(() => {
       }, 500);
     }
   }
+}
+
+// D3: коалесцируем шквал мутаций ленивого DOM Kaspi в один отложенный вызов.
+// Раньше callback бежал на КАЖДУЮ мутацию (реклама/ленивые картинки) = постоянная
+// нагрузка CPU. Теперь не чаще раза в 150мс.
+new MutationObserver(() => {
+  if (navDebounce) return;
+  navDebounce = setTimeout(() => {
+    navDebounce = null;
+    onDomMutated();
+  }, 150);
 }).observe(document.body, { childList: true, subtree: true });

@@ -14,7 +14,9 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { formatPercent, formatTenge } from "../lib/margin-calc";
+import { formatPercent, formatTenge, pluralRu } from "../lib/margin-calc";
+
+const TOVAR_FORMS: [string, string, string] = ["товар", "товара", "товаров"];
 import {
   ORG_FORM_INFO,
   checkRatesFreshness,
@@ -322,8 +324,10 @@ export function App() {
   /** Проставить одну себестоимость всем показанным (отфильтрованным) товарам. */
   async function applyBulkCost() {
     const cost = parseTenge(bulkCost);
-    if (cost === null) {
-      setStatus("Введите число себестоимости для массовой простановки.");
+    if (cost === null || cost < 0) {
+      // A6: отрицательную себестоимость не принимаем (иначе ниже по стеку
+      // занулится и даст фейковую прибыль «бесплатного товара»).
+      setStatus("Введите неотрицательное число себестоимости для массовой простановки.");
       return;
     }
     for (const r of rows) {
@@ -403,7 +407,8 @@ export function App() {
         <span className="spacer" />
         {snapshot && (
           <span className="dim">
-            {snapshot.name ?? snapshot.merchantId} · {snapshot.products.length} товаров
+            {snapshot.name ?? snapshot.merchantId} · {snapshot.products.length}{" "}
+            {pluralRu(snapshot.products.length, TOVAR_FORMS)}
           </span>
         )}
         <button
@@ -476,6 +481,7 @@ export function App() {
             id="search"
             type="text"
             placeholder="название или SKU"
+            value={filter.query ?? ""}
             onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
           />
         </div>
@@ -484,6 +490,7 @@ export function App() {
           <label>
             <input
               type="checkbox"
+              checked={!!filter.onlyDumped}
               onChange={(e) => setFilter((f) => ({ ...f, onlyDumped: e.target.checked }))}
             />
             демпингуют
@@ -491,6 +498,7 @@ export function App() {
           <label>
             <input
               type="checkbox"
+              checked={!!filter.onlyWithCost}
               onChange={(e) => setFilter((f) => ({ ...f, onlyWithCost: e.target.checked }))}
             />
             с себестоимостью
@@ -653,7 +661,7 @@ export function App() {
 
           <div className="so-foot">
             <div className="name">
-              Итого: {totals.productCount} товаров
+              Итого: {totals.productCount} {pluralRu(totals.productCount, TOVAR_FORMS)}
               {totals.withCostCount > 0 ? `, с себестоимостью ${totals.withCostCount}` : ""}
             </div>
             <div />
@@ -692,7 +700,7 @@ export function App() {
             </button>
           </div>
           <div style={{ fontSize: 12, marginBottom: 6 }}>
-            Первая строка — шапка: <b>артикул; название; цена</b>. Дальше по товару в строке.
+            Первая строка, шапка: <b>артикул; название; цена</b>. Дальше по товару в строке.
           </div>
           <textarea
             value={productsPaste}
@@ -744,7 +752,8 @@ function Row({
   }, [row.cost]);
   function commit() {
     const n = parseTenge(draft);
-    if (n !== null && n !== row.cost) void onSaveCost(product.sku, n);
+    // A6: отрицательную себестоимость не сохраняем (фейковая прибыль ниже по стеку).
+    if (n !== null && n >= 0 && n !== row.cost) void onSaveCost(product.sku, n);
   }
 
   return (

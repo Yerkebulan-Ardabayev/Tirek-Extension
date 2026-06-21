@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { calculateMargin, formatTenge, formatPercent, type MarginInput } from "../lib/margin-calc";
+import {
+  calculateMargin,
+  formatTenge,
+  formatPercent,
+  pluralRu,
+  type MarginInput,
+} from "../lib/margin-calc";
 
 /**
  * Тесты считают, что комиссии Kaspi и налоги соответствуют kaspi-fees.ts и
@@ -161,11 +167,11 @@ describe("calculateMargin — убыточные сценарии", () => {
     // Прибыль до налога должна быть отрицательной
     expect(r.profitBeforeTax).toBeLessThan(0);
 
-    // На убытке упрощёнка показывает 0 налога (см. логику calculateTax)
-    expect(r.taxAmount).toBe(0);
+    // A3: на убытке упрощёнка всё равно начисляет с оборота 4% × 10 000 = 400
+    expect(r.taxAmount).toBe(400);
 
-    // Чистая прибыль = прибыль до налога (т.к. налог 0)
-    expect(r.netProfit).toBe(r.profitBeforeTax);
+    // Чистая прибыль = прибыль до налога минус налог с оборота
+    expect(r.netProfit).toBe(r.profitBeforeTax - 400);
 
     // Маржа отрицательная
     expect(r.marginPercent).toBeLessThan(0);
@@ -194,14 +200,15 @@ describe("calculateMargin — ОУР с НДС", () => {
     // Прибыль до налога: 100 000 − 10 000 − 1 600 − 1 000 − 0 − 50 000 = 37 400
     expect(r.profitBeforeTax).toBe(37400);
 
-    // Налог: КПН 20% от 37 400 = 7 480 + НДС 16% от 100 000 = 16 000 → 23 480
-    expect(r.taxAmount).toBe(23480);
+    // A2: КПН 20% × 37 400 = 7 480 + НДС с наценки (100 000 − 50 000) × 16/116 ≈ 6 896.55
+    // Итого ≈ 14 376.55 (раньше ошибочно 23 480 от «16% со всей выручки»)
+    expect(r.taxAmount).toBeCloseTo(14376.55, 1);
 
-    // Чистая прибыль: 37 400 − 23 480 = 13 920
-    expect(r.netProfit).toBe(13920);
+    // Чистая прибыль: 37 400 − 14 376.55 ≈ 23 023.45
+    expect(r.netProfit).toBeCloseTo(23023.45, 1);
 
-    // Маржа: 13 920 / 100 000 × 100 = 13.92%
-    expect(r.marginPercent).toBeCloseTo(13.92, 2);
+    // Маржа ≈ 23.02%
+    expect(r.marginPercent).toBeCloseTo(23.02, 1);
   });
 
   it("Кейс 9: ТОО ОУР с зачётом НДС на комиссию (vatRefundable=true)", () => {
@@ -219,10 +226,11 @@ describe("calculateMargin — ОУР с НДС", () => {
     // Прибыль до налога: 100 000 − 10 000 − 0 − 1 000 − 0 − 50 000 = 39 000
     expect(r.profitBeforeTax).toBe(39000);
 
-    // Налог: КПН 20% от 39 000 = 7 800 + НДС 16% от 100 000 = 16 000 → 23 800
-    expect(r.taxAmount).toBe(23800);
+    // A2: КПН 20% × 39 000 = 7 800 + НДС с наценки (100 000 − 50 000) × 16/116 ≈ 6 896.55
+    // Итого ≈ 14 696.55
+    expect(r.taxAmount).toBeCloseTo(14696.55, 1);
 
-    expect(r.netProfit).toBe(15200);
+    expect(r.netProfit).toBeCloseTo(24303.45, 1);
   });
 
   it("Кейс 10: ТОО упрощёнка — та же 4% что у ИП", () => {
@@ -376,13 +384,14 @@ describe("calculateMargin — реалистичные комбо-сценари
     //   100 000 − 7 000 − 1 120 − 1 000 − 4 000 − 3 000 − 1 500 − 2 000 − 3 000 − 60 000 = 17 380
     expect(r.profitBeforeTax).toBe(17380);
 
-    // КПН 20% × 17 380 = 3 476 + НДС 16% × 100 000 = 16 000 → 19 476
-    expect(r.taxAmount).toBe(19476);
+    // A2: КПН 20% × 17 380 = 3 476 + НДС с наценки (100 000 − 60 000) × 16/116 ≈ 5 517.24
+    // Итого ≈ 8 993.24 (раньше ошибочно 19 476 → ЛОЖНЫЙ минус)
+    expect(r.taxAmount).toBeCloseTo(8993.24, 1);
 
-    // Чистая прибыль: 17 380 − 19 476 = −2 096 (минус!)
-    // Это типичная боль ОУР-селлера: на бумаге прибыль есть, после налогов минус.
-    expect(r.netProfit).toBe(-2096);
-    expect(r.marginPercent).toBeLessThan(0);
+    // Чистая прибыль: 17 380 − 8 993.24 ≈ 8 386.76 (ПЛЮС: НДС с наценки убирает
+    // ложную убыточность ОУР-селлера, которую давал прежний «16% со всей выручки»)
+    expect(r.netProfit).toBeCloseTo(8386.76, 1);
+    expect(r.marginPercent).toBeGreaterThan(0);
   });
 
   it("Кейс 14: Pharmacy + ОУР + vatRefundable — льготный НДС 5% и зачёт", () => {
@@ -407,15 +416,12 @@ describe("calculateMargin — реалистичные комбо-сценари
     // Прибыль до налога: 15 000 − 960 − 0 − 150 − 80 − 8 000 = 5 810
     expect(r.profitBeforeTax).toBe(5810);
 
-    // КПН 20% × 5 810 = 1 162 + НДС 16% × 15 000 = 2 400 → 3 562
-    // Замечание: в текущей модели НДС с оборота не уменьшается на зачитываемый
-    // НДС с услуги Kaspi. Это упрощение, документировано в kz-taxes.ts:90 как
-    // «не годовой расчёт, оценка с операции». Для аптек на ОУР с реальным учётом
-    // НДС итоговая сумма налога будет чуть ниже. Закрывается отдельной задачей.
-    expect(r.taxAmount).toBe(3562);
+    // A2: КПН 20% × 5 810 = 1 162 + НДС с наценки по ЛЬГОТНОЙ ставке 5% (медицина):
+    // (15 000 − 8 000) × 5/105 ≈ 333.33 → итого ≈ 1 495.33
+    expect(r.taxAmount).toBeCloseTo(1495.33, 1);
 
-    // Чистая прибыль: 5 810 − 3 562 = 2 248
-    expect(r.netProfit).toBe(2248);
+    // Чистая прибыль: 5 810 − 1 495.33 ≈ 4 314.67
+    expect(r.netProfit).toBeCloseTo(4314.67, 1);
 
     // В breakdown — лейбл НДС должен говорить «5%» и «зачитывается»
     const vatLabel = r.breakdown.find((b) => b.label.includes("НДС на комиссию Kaspi"));
@@ -446,8 +452,8 @@ describe("calculateMargin — реалистичные комбо-сценари
     });
     // Прибыль до налога точно отрицательна (комиссия+НДС+эквайринг+возвраты съели маржу)
     expect(r.profitBeforeTax).toBeLessThan(0);
-    // На убытке упрощёнка ставит налог 0 (см. calculateTax)
-    expect(r.taxAmount).toBe(0);
+    // A3: на убытке упрощёнка всё равно с оборота: 4% × 1000 = 40
+    expect(r.taxAmount).toBe(40);
     expect(r.netProfit).toBeLessThan(0);
   });
 });
@@ -464,5 +470,27 @@ describe("formatters", () => {
     expect(formatPercent(15.5)).toBe("+15.5%");
     expect(formatPercent(-5.0)).toBe("−5.0%");
     expect(formatPercent(0)).toBe("0.0%");
+  });
+
+  it("A8: formatTenge не выдаёт «−0 ₸» и «NaN ₸»", () => {
+    expect(formatTenge(-0.3)).toBe("0 ₸");
+    expect(formatTenge(-0)).toBe("0 ₸");
+    expect(formatTenge(NaN)).toBe("— ₸");
+    expect(formatTenge(Infinity)).toBe("— ₸");
+  });
+
+  it("A8: formatPercent не выдаёт «−0.0%» и «NaN%»", () => {
+    expect(formatPercent(-0.04)).toBe("0.0%");
+    expect(formatPercent(NaN)).toBe("—%");
+  });
+
+  it("F2: pluralRu склоняет по русским правилам", () => {
+    const f: [string, string, string] = ["товар", "товара", "товаров"];
+    expect(pluralRu(1, f)).toBe("товар");
+    expect(pluralRu(2, f)).toBe("товара");
+    expect(pluralRu(5, f)).toBe("товаров");
+    expect(pluralRu(11, f)).toBe("товаров");
+    expect(pluralRu(21, f)).toBe("товар");
+    expect(pluralRu(0, f)).toBe("товаров");
   });
 });

@@ -88,8 +88,9 @@ function randomInstallId(): string {
   crypto.getRandomValues(bytes);
   let hex = "";
   for (let i = 0; i < bytes.length; i++) hex += bytes[i]!.toString(16).padStart(2, "0");
-  // Группировка для читаемости: MRG-xxxxxxxx-xxxxxxxx.
-  return `MRG-${hex.slice(0, 8)}-${hex.slice(8, 16)}`.toUpperCase();
+  // Группировка для читаемости: TRK-xxxxxxxx-xxxxxxxx (F3: префикс был MRG- от
+  // Margli, остаток ребрендинга — виден в настройках каждому новому пользователю).
+  return `TRK-${hex.slice(0, 8)}-${hex.slice(8, 16)}`.toUpperCase();
 }
 
 /**
@@ -202,15 +203,24 @@ export async function verifyProCode(code: string): Promise<VerifyResult> {
   return verifySignedCode(code, installId, LICENSE_PUBLIC_KEY_JWK as unknown as JsonWebKey);
 }
 
-export async function getLicense(): Promise<License> {
+export async function getLicense(
+  verify: (code: string) => Promise<VerifyResult> = verifyProCode,
+): Promise<License> {
   if (!storageAvailable()) return { ...FREE_LICENSE };
   const result = await chrome.storage.local.get(LICENSE_KEY);
   const raw = result[LICENSE_KEY] as Partial<License> | undefined;
   const lic: License = { ...FREE_LICENSE, ...(raw ?? {}) };
-  // Истёкший код — это уже не Pro (но code/expiresAt оставляем для сообщения в UI).
-  if (lic.pro && typeof lic.expiresAt === "number" && Date.now() > lic.expiresAt) {
+  if (!lic.pro) return lic;
+  // Истёкший код — уже не Pro (code/expiresAt оставляем для сообщения в UI).
+  if (typeof lic.expiresAt === "number" && Date.now() > lic.expiresAt) {
     return { ...lic, pro: false };
   }
+  // B3: pro=true без валидной ПОДПИСИ кода не считается Pro — иначе платный доступ
+  // включался бы правкой одного флага в chrome.storage. Подделать подпись нельзя
+  // (вшит только публичный ключ). verify инъектируется для тестов.
+  if (!lic.code) return { ...lic, pro: false };
+  const res = await verify(lic.code);
+  if (!res.ok) return { ...lic, pro: false };
   return lic;
 }
 

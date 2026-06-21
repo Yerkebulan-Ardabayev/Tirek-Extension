@@ -95,22 +95,57 @@ export function splitCsvLine(line: string, delimiter: CsvDelimiter): string[] {
 /** Парсит число в ₸ из текста ячейки: «1 500,50 ₸» → 1500.5. null если не число. */
 export function parseTenge(raw: string): number | null {
   if (raw == null) return null;
-  let s = raw.replace(/ /g, " ").trim();
+  // NBSP / узкий / тонкий пробел -> обычный
+  let s = String(raw).replace(/[   ]/g, " ").trim();
   if (!s) return null;
-  // убрать валютные маркеры
-  s = s.replace(/₸|тенге|тг|kzt/giu, "");
-  // убрать пробелы-разделители тысяч
-  s = s.replace(/\s+/g, "");
-  if (s.includes(",") && s.includes(".")) {
-    // «1.500,50» → точка тысячи, запятая десятичная
-    s = s.replace(/\./g, "").replace(",", ".");
-  } else if (s.includes(",")) {
-    s = s.replace(",", ".");
+  // снять валютные маркеры
+  s = s.replace(/₸|тенге|тиын|тг|kzt/giu, " ").trim();
+  if (!s) return null;
+  // В чистой денежной ячейке после снятия валюты допустимы только цифры, пробелы
+  // (разделители тысяч), запятая/точка и ведущий минус. Буква/«e»/«+» -> не число.
+  if (/[^\d\s.,-]/.test(s)) return null;
+
+  const neg = /^-/.test(s);
+  const t = s.replace(/\s+/g, "").replace(/^-/, "");
+  if (!/^[\d.,]+$/.test(t) || !/\d/.test(t)) return null;
+
+  const commas = (t.match(/,/g) ?? []).length;
+  const dots = (t.match(/\./g) ?? []).length;
+  let intPart: string;
+  let fracPart = "";
+
+  if (commas > 0 && dots > 0) {
+    // оба разделителя: последний из них десятичный, остальные тысячи
+    const decPos = Math.max(t.lastIndexOf(","), t.lastIndexOf("."));
+    intPart = t.slice(0, decPos).replace(/[.,]/g, "");
+    fracPart = t.slice(decPos + 1);
+    if (/[.,]/.test(fracPart)) return null;
+  } else if (commas + dots === 0) {
+    intPart = t;
+  } else {
+    const sep = commas > 0 ? "," : ".";
+    const totalSeps = commas + dots;
+    const lastIdx = t.lastIndexOf(sep);
+    const trailing = t.slice(lastIdx + 1);
+    if (totalSeps > 1) {
+      // несколько одинаковых разделителей = только тысячи; группы строго по 3 цифры
+      const groupRe = new RegExp("^\\d{1,3}(?:\\" + sep + "\\d{3})+$");
+      if (!groupRe.test(t)) return null;
+      intPart = t.replace(/[.,]/g, "");
+    } else if (/^\d{3}$/.test(trailing) && lastIdx > 0) {
+      // один разделитель и ровно 3 цифры справа = тысячи («1 500» / «1,500» -> 1500)
+      intPart = t.replace(/[.,]/g, "");
+    } else {
+      // один разделитель = десятичный
+      intPart = t.slice(0, lastIdx);
+      fracPart = trailing;
+    }
   }
-  // оставить только цифры, точку и минус
-  s = s.replace(/[^0-9.\-]/g, "");
-  if (!s || s === "-" || s === ".") return null;
-  const n = parseFloat(s);
+
+  if (!/^\d*$/.test(intPart) || !/^\d*$/.test(fracPart)) return null;
+  if (intPart === "" && fracPart === "") return null;
+  const numStr = (neg ? "-" : "") + (intPart || "0") + (fracPart ? "." + fracPart : "");
+  const n = parseFloat(numStr);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -346,7 +381,11 @@ export type ProductsParseOptions = {
 
 /** Ссылка на карточку из SKU (master-id). Slug декоративен, важен id. */
 function productUrlFromSku(sku: string): string {
-  return "https://kaspi.kz/shop/p/p-" + sku + "/";
+  // E6: канонический URL карточки резолвится только для числового master-id (\d{6,}).
+  // Для иного SKU (внутренний артикул селлера) ведём на поиск Kaspi, чтобы ссылка
+  // не была гарантированным 404, а товар при этом не терялся из таблицы.
+  if (/^\d{6,}$/.test(sku)) return "https://kaspi.kz/shop/p/p-" + sku + "/";
+  return "https://kaspi.kz/search/?text=" + encodeURIComponent(sku);
 }
 
 /**

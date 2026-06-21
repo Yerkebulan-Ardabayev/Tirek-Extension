@@ -41,6 +41,12 @@ describe("parsePriceFromText", () => {
   it("за пределами sanity (>50 млн) → null", () => {
     expect(parsePriceFromText("99 999 999 999 ₸")).toBeNull();
   });
+  it("A5: «Hoco UA18 1 998 ₸» → 1998, НЕ 181998 (склейка цифр имени)", () => {
+    expect(parsePriceFromText("Hoco UA18 1 998 ₸")).toBe(1998);
+  });
+  it("E3: дешёвый товар «49 ₸» не отбрасывается (порог >=1)", () => {
+    expect(parsePriceFromText("49 ₸")).toBe(49);
+  });
 });
 
 describe("parseMerchantProductsFromDom — эвристический парсер витрины", () => {

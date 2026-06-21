@@ -6,8 +6,10 @@ import {
   filterRows,
   sortRows,
   type BuildRowsInput,
+  type StoreTableRow,
 } from "../lib/store-view-model";
 import type { Competitor, SkuCostProfile, StoreSnapshot } from "../lib/types";
+import type { StoreRowCalc } from "../lib/store-calc";
 
 function snapshot(): StoreSnapshot {
   return {
@@ -170,5 +172,47 @@ describe("filterRows", () => {
   });
   it("query по SKU", () => {
     expect(filterRows(rows, { query: "2" }).map((r) => r.product.sku)).toEqual(["2"]);
+  });
+});
+
+describe("A4: не-финитные значения (NaN/Infinity) не отравляют итоги и сортировку", () => {
+  function mkRow(sku: string, name: string, calc: Partial<StoreRowCalc>): StoreTableRow {
+    const base: StoreRowCalc = {
+      revenue: 0,
+      kaspiCommission: 0,
+      kaspiVat: 0,
+      kaspiFeesTotal: 0,
+      turnoverTax: 0,
+      remainderBeforeCost: 0,
+      hasCost: false,
+      netProfit: null,
+      marginPercent: null,
+      taxTotal: null,
+    };
+    return {
+      product: { sku, name, price: base.revenue, url: "u" + sku },
+      calc: { ...base, ...calc },
+      dumping: null,
+      hasCost: false,
+      cost: null,
+    };
+  }
+
+  it("totalRevenue/totalRemainder остаются конечными при NaN/Infinity строке", () => {
+    const good = mkRow("1", "A", { revenue: 1000, remainderBeforeCost: 800 });
+    const bad = mkRow("2", "B", { revenue: NaN, remainderBeforeCost: Infinity });
+    const totals = computeStoreTotals([good, bad]);
+    expect(Number.isFinite(totals.totalRevenue)).toBe(true);
+    expect(totals.totalRevenue).toBe(1000);
+    expect(Number.isFinite(totals.totalRemainderBeforeCost)).toBe(true);
+    expect(totals.totalRemainderBeforeCost).toBe(800);
+  });
+
+  it("NaN-цена уходит в конец сортировки, порядок детерминирован", () => {
+    const a = mkRow("1", "A", { revenue: NaN });
+    const b = mkRow("2", "B", { revenue: 5000 });
+    const c = mkRow("3", "C", { revenue: 1000 });
+    const sorted = sortRows([a, b, c], "price", "desc");
+    expect(sorted.map((r) => r.product.sku)).toEqual(["2", "3", "1"]);
   });
 });

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { calculateMargin, formatPercent, formatTenge } from "../lib/margin-calc";
+import { parseMoneyInput, parsePercentInput } from "../lib/num-input";
 import { getCategoryOptions } from "../lib/kaspi-fees";
 import { getTaxRegimeOptions } from "../lib/kz-taxes";
-import { getSettings } from "../lib/storage";
+import { getCalcForm, getSettings, setCalcForm } from "../lib/storage";
 import type { SellerSettings } from "../lib/types";
 
 type FormState = {
@@ -31,21 +32,35 @@ export function MarginCalculator() {
     useKaspiRed: false,
     hasSPP: false,
   });
+  const [loaded, setLoaded] = useState(false);
 
-  // Подтягиваем дефолты из настроек
+  // E4: сохранённый ввод приоритетнее дефолтов (popup закрывается по blur и терял
+  // всё); если сохранённого нет — подтягиваем дефолты из настроек.
   useEffect(() => {
     (async () => {
-      const s = await getSettings();
-      setForm((f) => ({
-        ...f,
-        categoryId: f.categoryId === "electronics" ? s.defaultCategoryId : f.categoryId,
-        taxRegime: s.taxRegime,
-        uproshenkaRatePercent: s.uproshenkaRatePercent ?? 4,
-        useKaspiRed: s.useKaspiRed,
-        hasSPP: s.hasSPP,
-      }));
+      const [s, saved] = await Promise.all([getSettings(), getCalcForm<FormState>()]);
+      setForm((f) =>
+        saved
+          ? { ...f, ...saved }
+          : {
+              ...f,
+              categoryId: f.categoryId === "electronics" ? s.defaultCategoryId : f.categoryId,
+              taxRegime: s.taxRegime,
+              uproshenkaRatePercent: s.uproshenkaRatePercent ?? 4,
+              useKaspiRed: s.useKaspiRed,
+              hasSPP: s.hasSPP,
+            },
+      );
+      setLoaded(true);
     })();
   }, []);
+
+  // E4: дебаунс-сохранение формы, чтобы ввод переживал закрытие popup.
+  useEffect(() => {
+    if (!loaded) return;
+    const t = window.setTimeout(() => void setCalcForm(form), 300);
+    return () => window.clearTimeout(t);
+  }, [form, loaded]);
 
   const result = useMemo(() => {
     const { uproshenkaRatePercent, ...rest } = form;
@@ -73,18 +88,10 @@ export function MarginCalculator() {
    * меняется, DOM остаётся '012'. Теперь хранится чистое число, а value
    * формируется из state — leading zero физически невозможен.
    */
-  const parseIntInput = (raw: string): number => {
-    const cleaned = raw.replace(/[^\d]/g, "");
-    if (cleaned === "") return 0;
-    return Number(cleaned);
-  };
-
-  const parseDecimalInput = (raw: string): number => {
-    const cleaned = raw.replace(/[^\d.,]/g, "").replace(",", ".");
-    if (cleaned === "" || cleaned === ".") return 0;
-    const n = Number(cleaned);
-    return Number.isFinite(n) ? n : 0;
-  };
+  // A6/A9: невалидный/отрицательный/гигантский ввод нормализуется у источника
+  // (общий протестированный хелпер), а не молча зануляется/раздувается вниз по стеку.
+  const parseIntInput = (raw: string): number => parseMoneyInput(raw);
+  const parseDecimalInput = (raw: string): number => parsePercentInput(raw);
 
   return (
     <>
@@ -220,11 +227,11 @@ export function MarginCalculator() {
         </div>
 
         <div className="breakdown">
-          {result.breakdown.map((b, i) => {
+          {result.breakdown.map((b) => {
             const isResult = b.label === "Выручка" || b.label.startsWith("Прибыль до") || b.label === "Чистая прибыль";
             const cls = isResult ? "total" : b.amount < 0 ? "expense" : "income";
             return (
-              <div className={"row " + cls} key={i}>
+              <div className={"row " + cls} key={b.label}>
                 <span className="label">{b.label}</span>
                 <span className="amount">{formatTenge(b.amount)}</span>
               </div>

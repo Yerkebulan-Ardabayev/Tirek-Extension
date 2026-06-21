@@ -574,7 +574,10 @@ function inferShopId(name: string, href: string | null): string {
     "shop-" +
     name
       .toLowerCase()
-      .replace(/[^a-z0-9а-яё]+/gi, "-")
+      // E1: \p{L}\p{N} вместо узкого [a-z0-9а-яё] — иначе казахские буквы
+      // (ә,і,ң,қ,ө,ұ,ү,ғ,һ) схлопывались в «-» и разные магазины давали один
+      // shopId (коллизии в blacklist/дедупе). Целевой рынок — KZ.
+      .replace(/[^\p{L}\p{N}]+/gu, "-")
       .replace(/^-|-$/g, "")
       .slice(0, 40)
   );
