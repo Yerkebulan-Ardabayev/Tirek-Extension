@@ -30,10 +30,9 @@ export const PRICE_MONTHLY_TENGE = 2990;
 
 /**
  * Куда селлер пишет после Kaspi-перевода, чтобы получить Pro-код.
- * Альфа: email владельца. Можно заменить на Telegram-канал поддержки.
+ * Бот поддержки Tirek, личный аккаунт владельца отправителю не виден.
  */
-export const SUPPORT_CONTACT_URL =
-  "mailto:yerkebulan.ardabayev@gmail.com?subject=Tirek%20Pro";
+export const SUPPORT_CONTACT_URL = "https://t.me/Tirek_Support_Bot";
 
 const LICENSE_KEY = "tirek:license";
 const INSTALL_ID_KEY = "tirek:installId";

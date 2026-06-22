@@ -4,8 +4,8 @@
 по полям. Версия пакета: `releases/tirek-extension-v0.1.0-alpha.9.zip`.
 
 > Заполнить руками перед подачей (не код):
-> - Реальный контакт поддержки в `src/lib/license.ts` → `SUPPORT_CONTACT_URL`
->   (сейчас заглушка `https://t.me/tirek_support`).
+> - Контакт поддержки в `src/lib/license.ts` → `SUPPORT_CONTACT_URL` =
+>   `https://t.me/Tirek_Support_Bot` (бот-пересыльщик, личка владельца скрыта).
 > - Privacy Policy URL (GitHub Pages, см. раздел ниже).
 > - 3-5 скриншотов 1280×800.
 > - $5 developer fee.
@@ -135,7 +135,7 @@ Pro (2990 ₸/мес): безлимит товаров под наблюдени
 
 ## Чек-лист подачи
 
-- [ ] Вписать реальный `SUPPORT_CONTACT_URL` в `src/lib/license.ts`, пересобрать (`npm run package`).
+- [x] `SUPPORT_CONTACT_URL` = бот `@Tirek_Support_Bot`. Пересобрать перед публикацией (`npm run package`).
 - [x] Privacy Policy написана: `docs/privacy.html` + `PRIVACY.md`. Осталось: включить GitHub Pages (Settings → Pages → ветка main, папка `/docs`) → URL `https://yerkebulan-ardabayev.github.io/Tirek-Extension/privacy.html` → вставить в листинг.
 - [ ] 3-5 скриншотов 1280×800 (калькулятор маржи, бейдж на карточке, боковая панель с демперами).
 - [ ] Оплатить $5 developer fee.
