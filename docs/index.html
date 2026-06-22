@@ -15,16 +15,17 @@
     />
     <style>
       :root {
-        --bg: #0f0a1c;
-        --bg-elev: #1a1426;
-        --bg-card: #221a33;
-        --text: #f5f3ff;
-        --text-muted: #a1a1aa;
-        --border: rgba(167, 139, 250, 0.2);
-        --brand: #a78bfa;
-        --brand-strong: #7c3aed;
+        color-scheme: light;
+        --bg: #fffdf7;
+        --bg-elev: #fff7ed;
+        --bg-card: #fffaf2;
+        --text: #231a0f;
+        --text-muted: #78716c;
+        --border: rgba(234, 88, 12, 0.18);
+        --brand: #ea580c;
+        --brand-strong: #c2410c;
         --warn: #f59e0b;
-        --success: #10b981;
+        --success: #16a34a;
       }
       * {
         box-sizing: border-box;
@@ -101,7 +102,7 @@
         font-weight: 800;
       }
       .hero h1 .accent {
-        background: linear-gradient(135deg, var(--brand), #c4b5fd);
+        background: linear-gradient(135deg, var(--brand), #f59e0b);
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -122,7 +123,7 @@
         font-size: 17px;
         font-weight: 700;
         border-radius: 12px;
-        box-shadow: 0 10px 30px rgba(124, 58, 237, 0.3);
+        box-shadow: 0 10px 30px rgba(234, 88, 12, 0.25);
         text-decoration: none;
         transition: transform 0.15s;
       }
@@ -243,7 +244,7 @@
         margin: 0;
       }
       .step code {
-        background: rgba(167, 139, 250, 0.15);
+        background: rgba(234, 88, 12, 0.12);
         color: var(--brand);
         padding: 2px 7px;
         border-radius: 6px;
@@ -336,7 +337,7 @@
     <header class="top">
       <div class="container">
         <div class="brand">
-          <span class="mark">M</span>
+          <span class="mark">T</span>
           <span>Tirek</span>
           <span class="pill">ALPHA</span>
         </div>
@@ -368,11 +369,11 @@
             </a>
             <a
               class="cta-tg"
-              href="https://t.me/tirek_bot"
+              href="https://t.me/Tirek_Support_Bot"
               target="_blank"
               rel="noreferrer"
             >
-              ✈ Написать в Telegram
+              ✈ Написать в поддержку
             </a>
           </div>
           <div class="cta-meta">
@@ -406,20 +407,21 @@
               </p>
             </div>
             <div class="feature">
-              <div class="ico">🔔</div>
-              <h3>Фоновое наблюдение</h3>
+              <div class="ico">🏪</div>
+              <h3>Обзор магазина</h3>
               <p>
-                Добавьте товары в watchlist — плагин раз в 30 минут проверяет
-                цены конкурентов, шлёт push-уведомление при появлении нового
-                демпера.
+                Загрузите каталог (выгрузка из кабинета или вставка) — и видите
+                таблицу по всем своим SKU сразу: цена, комиссия Kaspi, налог,
+                остаток до закупки и демперы по каждому товару.
               </p>
             </div>
             <div class="feature">
-              <div class="ico">📄</div>
-              <h3>PDF-досье</h3>
+              <div class="ico">🧮</div>
+              <h3>Налоги РК 2026</h3>
               <p>
-                В один клик генерирует досье жалобы для Kaspi: ваш товар, ваша
-                цена, список демперов с дельтами и кол-вом отзывов, дата.
+                Упрощёнка по ставке вашего региона, НДС 16% с наценки, ОУР для
+                ИП и ТОО — посчитано по первоисточникам (НК РК, Соц. кодекс), а
+                не на глаз.
               </p>
             </div>
           </div>
@@ -471,7 +473,7 @@
                 <h3>Загрузить распакованное</h3>
                 <p>
                   Нажмите «Загрузить распакованное» (Load unpacked) → выберите
-                  папку из шага 2 → готово. Иконка <strong>M</strong> Tirek
+                  папку из шага 2 → готово. Иконка <strong>T</strong> Tirek
                   появится в панели расширений.
                 </p>
                 <p class="toggle-img">
@@ -543,8 +545,9 @@
           <details>
             <summary>Как сообщить о баге или предложить фичу?</summary>
             <p>
-              Жмите кнопку Telegram внизу страницы — там общий чат тестеров.
-              Можно скриншоты, видео, голосовые. Альтернатива —
+              Жмите «Написать в поддержку» вверху страницы — это наш
+              Telegram-бот, пишете ему, автор отвечает там же. Можно скриншоты,
+              видео, голосовые. Альтернатива —
               <a
                 href="https://github.com/Yerkebulan-Ardabayev/Tirek-Extension/issues"
                 target="_blank"
@@ -563,9 +566,14 @@
           <details>
             <summary>Будут ли обновления?</summary>
             <p>
-              Да. Когда выходит новая версия — придёт сообщение в Telegram-чат
-              + новый zip на этой странице. Распаковываете поверх старой папки,
-              в <code>chrome://extensions</code> жмёте 🔄 у Tirek.
+              Да. Новая версия — это новый zip на этой странице (и в
+              <a
+                href="https://github.com/Yerkebulan-Ardabayev/Tirek-Extension/releases/latest"
+                target="_blank"
+                rel="noreferrer"
+                >GitHub Releases</a
+              >). Скачиваете, распаковываете поверх старой папки, в
+              <code>chrome://extensions</code> жмёте 🔄 у Tirek.
             </p>
           </details>
         </div>
